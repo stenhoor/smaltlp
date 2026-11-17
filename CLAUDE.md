@@ -55,4 +55,9 @@ The family's rules: one task per branch and pull request; open it once CI passes
   Python packages (highspy, scipy, PuLP) go in `compare/requirements.txt` with the first compare PR. Ask the owner
   before adding any other package.
 - **No number without its benchmark.** A speed claim names the benchmark that measured it, which anyone can rerun.
+- **Layout:** `src/core/` holds what every solver shares (`errors.ts`, `sparse.ts` for CSC matrices, `basis.ts` for
+  the basis factorization); `src/lp/` holds linear programs (`simplex.ts`, the dual simplex; `linprog.ts`, scipy's
+  interface). Each area with its own `index.ts` is an entry point in `package.json` `exports`.
+- **Tests check answers the maths can prove** until the compare tests arrive: known optima and duals, and the
+  optimality conditions (KKT) on random problems (`test/kkt.test.ts`).
 - A significant decision gets an ADR, numbered in the family's sequence (smaltworks `adr/README.md`).

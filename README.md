@@ -4,9 +4,27 @@
 
 **Small. Alternative. Optimal.** Linear and integer programming for smaltdb, in the browser.
 
-**Status: proposed.** Nothing solves yet. This repository holds the scaffold while
-[smaltworks ADR 0039](https://github.com/stenhoor/smaltworks/blob/main/adr/0039-smaltlp-scope-and-architecture.md),
-its scope and architecture, is reviewed.
+**Status: phase 1, first slice, under way** ([smaltworks ADR 0039](https://github.com/stenhoor/smaltworks/blob/main/adr/0039-smaltlp-scope-and-architecture.md)).
+`linprog()` solves linear programs with a bounded dual simplex: dual steepest edge pricing, the bound-flipping
+ratio test and Harris's two passes. Its LU factorization is dense for now, so each iteration costs O(m²) for m
+constraints; a sparse LU, presolve, the modelling layer, MPS files and the compare tests against HiGHS come next.
+
+```ts
+import { linprog } from '@smaltworks/smaltlp';
+
+// Minimize -x + 4y subject to -3x + y ≤ 6, x + 2y ≤ 4, x free, y ≥ -3.
+const res = await linprog([-1, 4], {
+  AUb: [[-3, 1], [1, 2]],
+  bUb: [6, 4],
+  bounds: [[null, null], [-3, null]],
+});
+res.x; // Float64Array [10, -3]
+res.fun; // -22
+```
+
+`linprog()` takes scipy.optimize.linprog's parameters in camelCase (`A_ub` is `AUb`) and gives its status codes and
+result fields, duals (`marginals`) included. `integrality` fails with `LP_UNSUPPORTED`: integer variables come with
+`milp()` in phase 2.
 
 ## What it will be
 
