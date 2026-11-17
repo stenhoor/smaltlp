@@ -58,7 +58,8 @@ The family's rules: one task per branch and pull request; open it once CI passes
 - **Layout:** `src/core/` holds what every solver shares (`errors.ts`, `sparse.ts` for CSC matrices, `basis.ts` for
   the basis factorization); `src/lp/` holds linear programs (`simplex.ts`, the dual simplex; `linprog.ts`, scipy's
   interface); `src/model/` is the modelling layer in PuLP's style (`LpProblem`, `LpVariable`, PuLP's names and status
-  codes), solved by the same dual simplex. Each area with its own `index.ts` is an entry point in `package.json`
+  codes), solved by the same dual simplex; `src/io/` reads model files (`mps.ts`, MPS free and fixed, and
+  `mpsToProblem()`). Each area with its own `index.ts` is an entry point in `package.json`
   `exports`.
 - **Tests check answers the maths can prove** until the compare tests arrive: known optima and duals, and the
   optimality conditions (KKT) on random problems (`test/kkt.test.ts`).
