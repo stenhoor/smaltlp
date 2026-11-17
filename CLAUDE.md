@@ -34,6 +34,7 @@ The family's rules: one task per branch and pull request; open it once CI passes
 | --- | --- |
 | `npm ci` | Installs dependencies, and builds `dist/` |
 | `npm run check` | Typecheck (TypeScript 7, the `typescript7` dev dependency), then the tests (`node --test`, on the TypeScript source: Node 22.18 and later strip its types) |
+| `npm run compare` | Reruns `compare/run.py` through scipy, PuLP and highspy (pinned in `compare/requirements.txt`) and rewrites `fixtures/compare.json` |
 | `npm run build` | `dist/` and type declarations, emitted by TypeScript 6.0.3 (`tsc`) for one more release (smaltty ADR 0030, decision 5) |
 
 ## Rules
@@ -61,6 +62,9 @@ The family's rules: one task per branch and pull request; open it once CI passes
   codes), solved by the same dual simplex; `src/io/` reads model files (`mps.ts`, MPS free and fixed, and
   `mpsToProblem()`). Each area with its own `index.ts` is an entry point in `package.json`
   `exports`.
-- **Tests check answers the maths can prove** until the compare tests arrive: known optima and duals, and the
-  optimality conditions (KKT) on random problems (`test/kkt.test.ts`).
+- **Compare tests** (ADR 0039, section 6): `compare/run.py` runs every case through scipy's linprog (HiGHS), PuLP
+  (with HiGHS) and HiGHS's MPS reader, and writes `fixtures/compare.json`; `test/compare.test.ts` checks smaltlp
+  against it, without Python. A new feature or option gets cases there: run `npm run compare` (in a virtual
+  environment with `compare/requirements.txt`) and commit the fixtures. Cases are our own, hand-written or generated
+  from a seed. Beside them, `test/kkt.test.ts` checks the optimality conditions on random problems.
 - A significant decision gets an ADR, numbered in the family's sequence (smaltworks `adr/README.md`).

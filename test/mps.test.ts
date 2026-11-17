@@ -142,8 +142,9 @@ BOUNDS
 ENDATA`);
   assert.equal(m.sense, 'maximize');
   assert.equal(m.offset, 2.5);
-  assert.deepEqual([...m.colLo], [-Infinity, -Infinity, 0, -Infinity, 2, 0, 1, 0]);
-  assert.deepEqual([...m.colUp], [Infinity, 5, Infinity, -3, 2, 1, 9, Infinity]);
+  // c, an integer column with no bounds, is 0 to 1; d's negative UP leaves its lower bound at 0 (both as HiGHS).
+  assert.deepEqual([...m.colLo], [-Infinity, -Infinity, 0, 0, 2, 0, 1, 0]);
+  assert.deepEqual([...m.colUp], [Infinity, 5, 1, -3, 2, 1, 9, Infinity]);
   assert.deepEqual([...m.integer], [0, 0, 1, 0, 0, 1, 1, 0]);
 });
 

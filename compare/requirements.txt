@@ -1,0 +1,8 @@
+# The compare tests' reference, for development only: never part of the package (smaltworks ADR 0039, section 6).
+# Approved by the owner on 2026-11-17: highspy, scipy and PuLP. numpy and orloge are their dependencies, pinned so
+# a rerun reproduces the fixtures.
+highspy==1.16.0
+scipy==1.18.1
+PuLP==4.2.0
+numpy==2.5.5
+orloge==1.0.0
