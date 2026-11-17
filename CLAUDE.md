@@ -9,8 +9,11 @@ is part of the smalt family: smaltworks' [CONTEXT.md](https://github.com/stenhoo
 
 ## Brand
 
-Its own brand, like smaltml's (ADR 0039, section 9). smalt-brand picks it; until then the README and any site stay
-plain. Brand files are copied unchanged from smalt-brand once they exist.
+Before changing the README, a site or how the product is described, read smalt-brand's `BRAND.md` and `DECISIONS.md`.
+smaltlp's brand is set (smalt-brand DECISIONS.md, "smaltlp", 2026-11-17): "Small. Alternative. Optimal.", "Linear and
+integer programming for smaltdb, in the browser.", said smalt-L-P, the **Aim** mark, in the Kits layer's jade. The logo
+files and badges in `docs/public/` come from smalt-brand's `logos/smaltlp/` and `badges/`, unchanged; a change starts
+there.
 
 ## Workflow
 
