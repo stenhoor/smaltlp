@@ -9,8 +9,9 @@
  * - `LP_SHAPE`: a matrix or vector has the wrong number of rows or columns for the others.
  * - `LP_VALUE`: a number is NaN, or infinite where it must be finite.
  * - `LP_UNSUPPORTED`: a feature smaltlp doesn't have yet. It fails rather than answering differently.
+ * - `LP_FORMAT`: a model file (MPS) that doesn't follow its format; the message names the line.
  */
-export type ErrorCode = 'LP_PARAM' | 'LP_SHAPE' | 'LP_VALUE' | 'LP_UNSUPPORTED';
+export type ErrorCode = 'LP_PARAM' | 'LP_SHAPE' | 'LP_VALUE' | 'LP_UNSUPPORTED' | 'LP_FORMAT';
 
 /** An error from smaltlp, with a {@link ErrorCode}. */
 export class SmaltlpError extends Error {

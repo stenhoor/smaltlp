@@ -40,6 +40,10 @@
       "types": "./dist/model/index.d.ts",
       "default": "./dist/model/index.js"
     },
+    "./io": {
+      "types": "./dist/io/index.d.ts",
+      "default": "./dist/io/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

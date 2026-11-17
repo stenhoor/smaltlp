@@ -7,7 +7,7 @@
 **Status: phase 1, first slice, under way** ([smaltworks ADR 0039](https://github.com/stenhoor/smaltworks/blob/main/adr/0039-smaltlp-scope-and-architecture.md)).
 `linprog()` solves linear programs with a bounded dual simplex: dual steepest edge pricing, the bound-flipping
 ratio test and Harris's two passes. Its LU factorization is dense for now, so each iteration costs O(m²) for m
-constraints; a sparse LU, presolve, MPS files and the compare tests against HiGHS come next.
+constraints; a sparse LU, presolve and the compare tests against HiGHS come next.
 
 ```ts
 import { linprog } from '@smaltworks/smaltlp';
@@ -36,6 +36,15 @@ prob.add(x.le(4), 'plant1').add(y.times(2).le(12), 'plant2').add(plant3, 'plant3
 LpStatus[await prob.solve()]; // 'Optimal'
 [x.varValue, y.varValue, value(prob.objective)]; // [2, 6, 36]
 plant3.pi; // 1: the objective's gain per unit more of plant 3
+```
+
+Or read a model from an MPS file, free or fixed:
+
+```ts
+import { readMps, mpsToProblem } from '@smaltworks/smaltlp/io';
+
+const prob = mpsToProblem(readMps(text)); // an LpProblem, with a variable per column and a constraint per row
+await prob.solve();
 ```
 
 `linprog()` takes scipy.optimize.linprog's parameters in camelCase (`A_ub` is `AUb`) and gives its status codes and
