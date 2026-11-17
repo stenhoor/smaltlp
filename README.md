@@ -7,7 +7,7 @@
 **Status: phase 1, first slice, under way** ([smaltworks ADR 0039](https://github.com/stenhoor/smaltworks/blob/main/adr/0039-smaltlp-scope-and-architecture.md)).
 `linprog()` solves linear programs with a bounded dual simplex: dual steepest edge pricing, the bound-flipping
 ratio test and Harris's two passes. Its LU factorization is dense for now, so each iteration costs O(m²) for m
-constraints; a sparse LU, presolve, the modelling layer, MPS files and the compare tests against HiGHS come next.
+constraints; a sparse LU, presolve, MPS files and the compare tests against HiGHS come next.
 
 ```ts
 import { linprog } from '@smaltworks/smaltlp';
@@ -20,6 +20,22 @@ const res = await linprog([-1, 4], {
 });
 res.x; // Float64Array [10, -3]
 res.fun; // -22
+```
+
+Or build the model by name, in PuLP's style:
+
+```ts
+import { LpProblem, LpVariable, LpStatus, value } from '@smaltworks/smaltlp/model';
+
+const prob = new LpProblem('plan', 'maximize');
+const x = new LpVariable('x', { lowBound: 0 });
+const y = new LpVariable('y', { lowBound: 0 });
+prob.add(x.times(3).plus(y.times(5))); // the objective
+const plant3 = x.times(3).plus(y.times(2)).le(18);
+prob.add(x.le(4), 'plant1').add(y.times(2).le(12), 'plant2').add(plant3, 'plant3');
+LpStatus[await prob.solve()]; // 'Optimal'
+[x.varValue, y.varValue, value(prob.objective)]; // [2, 6, 36]
+plant3.pi; // 1: the objective's gain per unit more of plant 3
 ```
 
 `linprog()` takes scipy.optimize.linprog's parameters in camelCase (`A_ub` is `AUb`) and gives its status codes and
