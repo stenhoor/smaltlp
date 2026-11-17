@@ -32,6 +32,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./lp": {
+      "types": "./dist/lp/index.d.ts",
+      "default": "./dist/lp/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
