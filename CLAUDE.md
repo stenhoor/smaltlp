@@ -1,0 +1,55 @@
+# CLAUDE.md
+
+smaltlp (repository `stenhoor/smaltlp`, npm `@smaltworks/smaltlp`) is linear and mixed-integer programming for the
+smalt family, in TypeScript. It is a kit, beside smaltml. Its scope and architecture are smaltworks
+[ADR 0039](https://github.com/stenhoor/smaltworks/blob/main/adr/0039-smaltlp-scope-and-architecture.md) (proposed). It
+is part of the smalt family: smaltworks' [CONTEXT.md](https://github.com/stenhoor/smaltworks/blob/main/CONTEXT.md),
+[STANDARDS.md](https://github.com/stenhoor/smaltworks/blob/main/STANDARDS.md) and
+[session rules](https://github.com/stenhoor/smaltworks/blob/main/context/session-rules.md) apply here.
+
+## Brand
+
+Its own brand, like smaltml's (ADR 0039, section 9). smalt-brand picks it; until then the README and any site stay
+plain. Brand files are copied unchanged from smalt-brand once they exist.
+
+## Workflow
+
+The family's rules: one task per branch and pull request; open it once CI passes; the owner merges. Before pushing,
+`npm run check`.
+
+- **Facts only.** Don't tell the owner something you haven't confirmed. Label everything else as an assumption, in
+  those words, with what would confirm it.
+- **Watch your PRs to the merge,** through their events, never by polling. Merging stays with the owner.
+- **Ask before adding outside code.** Ask the owner, and wait for a yes, before adding a package (a dependency of any
+  kind, or a pin in `packed.json`), copying or bundling in someone else's code, or loading code from another site at run
+  time (a CDN such as jsDelivr). Say what it is, its licence and size, what it's for, and why our own code can't do it.
+  Outside code that a feature needs goes in a plugin, so it is named and optional, never in core.
+
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `npm ci` | Installs dependencies, and builds `dist/` |
+| `npm run check` | Typecheck (TypeScript 7, the `typescript7` dev dependency), then the tests (`node --test`, on the TypeScript source: Node 22.18 and later strip its types) |
+| `npm run build` | `dist/` and type declarations, emitted by TypeScript 6.0.3 (`tsc`) for one more release (smaltty ADR 0030, decision 5) |
+
+## Rules
+
+- **References for behaviour, not code** (ADR 0039, section 2). scipy and HiGHS for results and status codes, PuLP for
+  the modelling layer. Write our own code from the documentation and the papers; never copy or translate HiGHS, PuLP,
+  OR-Tools, CLP, CBC or GLPK.
+- **The CPU path is the product** (section 4): 64-bit floats, every browser, Node. WebGPU (section 7) is an accelerator,
+  kept only where measured, and a GPU result that fails the 64-bit check is never returned as optimal.
+- **Asynchronous API over a synchronous core** (section 3): every solve has a `*Sync` twin; the core touches neither
+  the DOM nor Node.
+- **No WebAssembly in this package.** Replaceable kernels go through smaltlp's own versioned contract (section 8); a
+  plugin that serves them follows smaltworks DECISIONS.md, "WebAssembly: plugins only".
+- **Unsupported fails, never answers differently:** a problem or option smaltlp doesn't support yet fails with an error
+  and a code.
+- **Erasable TypeScript only** (`erasableSyntaxOnly`): no enums, namespaces or parameter properties, so Node runs the
+  source as it is. Relative imports name the `.ts` file; the build rewrites them to `.js`.
+- **No runtime dependencies.** Dev dependencies: TypeScript (6.0.3 and 7) and `@types/node`. The compare tests'
+  Python packages (highspy, scipy, PuLP) go in `compare/requirements.txt` with the first compare PR. Ask the owner
+  before adding any other package.
+- **No number without its benchmark.** A speed claim names the benchmark that measured it, which anyone can rerun.
+- A significant decision gets an ADR, numbered in the family's sequence (smaltworks `adr/README.md`).
