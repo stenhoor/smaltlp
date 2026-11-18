@@ -1,21 +1,23 @@
 /**
- * The modelling layer, in PuLP's style (smaltworks ADR 0039, section 3): variables, linear expressions, constraints
- * and an objective, by name, solved by the same dual simplex as `linprog()`.
+ * The modelling layer, in PuLP 4.2's style (smaltworks ADR 0039, section 3; the owner, 2026-11-18: follow PuLP 4.2
+ * only): a problem, its variables, linear expressions, constraints and an objective, solved by the same dual simplex as
+ * `linprog()`.
  *
- * PuLP's names and meanings, adapted to TypeScript. TypeScript has no operator overloading, so `x + 2 * y <= 4`
- * is written `x.plus(y.times(2)).le(4)`, and `prob += …` is `prob.add(…)`: an expression sets the objective, a
- * constraint is added. A `name` is optional, as in PuLP.
+ * PuLP 4.2's names and meanings, in camelCase as the family writes them (`add_variable` is `addVariable`,
+ * `get_constraint_by_name` is `getConstraintByName`, `status_str` is `statusStr`). TypeScript has no operator
+ * overloading, so `x + 2 * y <= 4` is written `x.plus(y.times(2)).le(4)`, and `prob += …` is `prob.add(…)`: an
+ * expression sets the objective, a constraint is added.
  *
  * <!-- docs:skip -->
  * ```ts
- * const prob = new LpProblem('plan', 'maximize');
- * const x = new LpVariable('x', { lowBound: 0 });
- * const y = new LpVariable('y', { lowBound: 0 });
+ * const prob = new LpProblem('plan', LpMaximize);
+ * const x = prob.addVariable('x', 0);
+ * const y = prob.addVariable('y', 0);
  * prob.add(x.times(3).plus(y.times(5)));
  * prob.add(x.le(4), 'plant1');
  * prob.add(y.times(2).le(12), 'plant2');
  * prob.add(x.times(3).plus(y.times(2)).le(18), 'plant3');
- * await prob.solve(); // 1: LpStatus[1] is 'Optimal'
+ * const stats = await prob.solve(); // stats.status === LpSolveStatus.Optimal
  * x.varValue; // 2
  * value(prob.objective); // 36
  * ```
@@ -25,54 +27,77 @@ import { fail } from '../core/errors.ts';
 import { fromTriplets } from '../core/sparse.ts';
 import { dualSimplex, type Status } from '../lp/simplex.ts';
 
-/** A variable's category, as PuLP names them. Only `'Continuous'` solves until `milp()` (phase 2). */
+/** Minimize: PuLP's LpMinimize, 1. */
+export const LpMinimize = 1;
+/** Maximize: PuLP's LpMaximize, -1. */
+export const LpMaximize = -1;
+export type Sense = typeof LpMinimize | typeof LpMaximize;
+
+/** A constraint's sense, as PuLP numbers them: ≤ is -1, = is 0, ≥ is 1. */
+export const LpConstraintLE = -1;
+export const LpConstraintEQ = 0;
+export const LpConstraintGE = 1;
+export type ConstraintSense = typeof LpConstraintLE | typeof LpConstraintEQ | typeof LpConstraintGE;
+
+/**
+ * How a solve ended: PuLP 4.2's LpSolveStatus codes. smaltlp gives Optimal, Infeasible, Unbounded, IterationLimit
+ * (when `maxIter` stops it) and NumericalError; NotSolved before any solve.
+ */
+export const LpSolveStatus = {
+  NotSolved: 0,
+  Optimal: 1,
+  Infeasible: -1,
+  Unbounded: -2,
+  Undefined: -3,
+  TimeLimit: -4,
+  MemoryLimit: -5,
+  NodeLimit: -6,
+  GapLimit: -7,
+  IterationLimit: -8,
+  SolutionLimit: -9,
+  Interrupted: -10,
+  Stopped: -11,
+  NumericalError: -12,
+} as const;
+export type SolveStatus = (typeof LpSolveStatus)[keyof typeof LpSolveStatus];
+
+/** A status code's name, as PuLP's status_str gives it. */
+function statusName(code: SolveStatus): string {
+  return Object.entries(LpSolveStatus).find(([, v]) => v === code)![0];
+}
+
+/** A variable's category. Only `'Continuous'` solves until `milp()` (phase 2). */
 export type Category = 'Continuous' | 'Integer' | 'Binary';
 
 /** What an expression can be built from: a variable, an expression, or a number. */
 export type Term = LpVariable | LpAffineExpression | number;
 
-export interface VariableOptions {
-  /** The lower bound; `null` (or -Infinity) for none. Default `null`, as in PuLP. */
-  lowBound?: number | null;
-  /** The upper bound; `null` (or Infinity) for none. Default `null`. */
-  upBound?: number | null;
-  /** Default `'Continuous'`. */
-  cat?: Category;
-}
+/** Only LpProblem.addVariable() makes variables, as in PuLP 4.2. */
+const MAKE = Symbol('LpVariable');
 
 /**
- * A decision variable. After a solve, `varValue` holds its value and `dj` its reduced cost, as in PuLP.
+ * A decision variable, made by {@link LpProblem.addVariable} and bound to that problem. After a solve, `varValue`
+ * holds its value and `dj` its reduced cost.
  */
 export class LpVariable {
   readonly name: string;
   readonly lowBound: number | null;
   readonly upBound: number | null;
   readonly cat: Category;
-  /** The value from the last solve that included it, or null. */
+  /** The problem the variable belongs to. */
+  readonly problem: LpProblem;
+  /** The value from the last solve, or null. */
   varValue: number | null = null;
   /** The reduced cost from the last solve: the objective's change per unit the variable moves off its bound. */
   dj: number | null = null;
 
-  constructor(name: string, options: VariableOptions = {}) {
-    if (typeof name !== 'string' || name === '') fail('LP_PARAM', 'a variable needs a name');
-    if (/\s/.test(name)) fail('LP_PARAM', `variable name '${name}' has a space; names are used in LP and MPS files`);
-    const cat = options.cat ?? 'Continuous';
-    if (cat !== 'Continuous' && cat !== 'Integer' && cat !== 'Binary') fail('LP_PARAM', `cat is 'Continuous', 'Integer' or 'Binary', not ${String(cat)}`);
-    let lo = options.lowBound ?? null;
-    let up = options.upBound ?? null;
-    if (cat === 'Binary') {
-      lo = 0;
-      up = 1;
-    }
-    for (const [label, v] of [['lowBound', lo], ['upBound', up]] as const) {
-      if (v !== null && (typeof v !== 'number' || Number.isNaN(v))) fail('LP_VALUE', `${name}: ${label} is ${String(v)}; it must be a number or null`);
-    }
-    if (lo === -Infinity) lo = null;
-    if (up === Infinity) up = null;
-    if (lo === Infinity || up === -Infinity) fail('LP_VALUE', `${name}: a bound of ${lo === Infinity ? 'lowBound Infinity' : 'upBound -Infinity'} leaves no value`);
+  /** @internal Use {@link LpProblem.addVariable}. */
+  constructor(token: symbol, problem: LpProblem, name: string, lowBound: number | null, upBound: number | null, cat: Category) {
+    if (token !== MAKE) fail('LP_PARAM', 'variables come from a problem: use prob.addVariable(name, lowBound, upBound, cat)');
+    this.problem = problem;
     this.name = name;
-    this.lowBound = lo;
-    this.upBound = up;
+    this.lowBound = lowBound;
+    this.upBound = upBound;
     this.cat = cat;
   }
 
@@ -134,15 +159,15 @@ export class LpAffineExpression {
   }
   /** `this ≤ rhs`. */
   le(rhs: Term): LpConstraint {
-    return new LpConstraint(this.minus(rhs), 'le');
+    return new LpConstraint(this.minus(rhs), LpConstraintLE);
   }
   /** `this ≥ rhs`. */
   ge(rhs: Term): LpConstraint {
-    return new LpConstraint(this.minus(rhs), 'ge');
+    return new LpConstraint(this.minus(rhs), LpConstraintGE);
   }
   /** `this = rhs`. */
   eq(rhs: Term): LpConstraint {
-    return new LpConstraint(this.minus(rhs), 'eq');
+    return new LpConstraint(this.minus(rhs), LpConstraintEQ);
   }
   toString(): string {
     const parts: string[] = [];
@@ -154,37 +179,36 @@ export class LpAffineExpression {
 
 /**
  * A constraint: an expression and a sense, `expression ≤ 0`, `≥ 0` or `= 0`, with the right-hand side folded into the
- * expression's constant. After a solve, `pi` is its dual value and `slack` its slack.
+ * expression's constant (`constant` is −rhs, as in PuLP). After a solve, `pi` is its dual value and `slack` its slack.
  */
 export class LpConstraint {
   readonly expression: LpAffineExpression;
-  readonly sense: 'le' | 'ge' | 'eq';
-  /** The name given when it was added to a problem. */
+  readonly sense: ConstraintSense;
+  /** The name given when it was added to a problem, or `_C1`, `_C2` … */
   name: string | null = null;
   /** The objective's change per unit of the right-hand side, in the problem's own sense, from the last solve. */
   pi: number | null = null;
   /** How far the constraint is from binding: rhs − lhs for ≤, lhs − rhs for ≥, 0 for =. From the last solve. */
   slack: number | null = null;
 
-  constructor(expression: LpAffineExpression, sense: 'le' | 'ge' | 'eq') {
+  constructor(expression: LpAffineExpression, sense: ConstraintSense) {
     this.expression = expression;
     this.sense = sense;
   }
 
-  /** The right-hand side, with every variable on the left: −constant. */
+  /** The expression's constant: −rhs, with every variable on the left. */
+  get constant(): number {
+    return this.expression.constant;
+  }
+  /** The right-hand side. */
   get rhs(): number {
     return -this.expression.constant;
   }
+  toString(): string {
+    const lhs = new LpAffineExpression(this.expression.terms, 0).toString();
+    return `${lhs} ${this.sense === LpConstraintLE ? '<=' : this.sense === LpConstraintGE ? '>=' : '='} ${this.rhs}`;
+  }
 }
-
-/** The status codes of {@link LpProblem.solve}, as PuLP numbers them. */
-export const LpStatus: Readonly<Record<number, string>> = {
-  1: 'Optimal',
-  0: 'Not Solved',
-  [-1]: 'Infeasible',
-  [-2]: 'Unbounded',
-  [-3]: 'Undefined',
-};
 
 /** The sum of the terms, as an expression: PuLP's lpSum. */
 export function lpSum(terms: Iterable<Term>): LpAffineExpression {
@@ -217,25 +241,57 @@ export interface SolveOptions {
   tol?: number;
 }
 
-/** A linear program, built up by {@link add}: an objective to minimize or maximize, and named constraints. */
+/** What a solve reports: PuLP 4.2's LpSolveStats, the fields smaltlp has, in camelCase. */
+export interface LpSolveStats {
+  solver: 'smaltlp';
+  status: SolveStatus;
+  /** The status's name, such as 'Optimal'. */
+  statusStr: string;
+  hasSolution: boolean;
+  /** The objective's value, or null without a solution. */
+  objective: number | null;
+  numVariables: number;
+  numConstraints: number;
+  isMip: boolean;
+  /** Seconds the solve took. */
+  time: number;
+}
+
+/** A linear program: its variables (made by {@link addVariable}), an objective, and named constraints. */
 export class LpProblem {
   readonly name: string;
-  readonly sense: 'minimize' | 'maximize';
+  readonly sense: Sense;
   /** The objective, or null if none was set (then any feasible point is optimal). */
   objective: LpAffineExpression | null = null;
-  /** The constraints, by name, in the order they were added. */
-  readonly constraints = new Map<string, LpConstraint>();
-  /** The status of the last solve: PuLP's codes (see {@link LpStatus}); 0 before any. */
-  status = 0;
+  private readonly vars: LpVariable[] = [];
+  private readonly cons: LpConstraint[] = [];
+  private readonly byName = new Map<string, LpConstraint>();
 
-  constructor(name = 'NoName', sense: 'minimize' | 'maximize' = 'minimize') {
-    if (sense !== 'minimize' && sense !== 'maximize') fail('LP_PARAM', `sense is 'minimize' or 'maximize', not ${String(sense)}`);
+  constructor(name = 'NoName', sense: Sense = LpMinimize) {
+    if (sense !== LpMinimize && sense !== LpMaximize) fail('LP_PARAM', `sense is LpMinimize (1) or LpMaximize (-1), not ${String(sense)}`);
     this.name = name;
     this.sense = sense;
   }
 
   /**
-   * PuLP's `prob += …`: a constraint is added (named, or `_C1`, `_C2` … as PuLP does); anything else becomes the
+   * Makes a variable in this problem, as PuLP 4.2's add_variable: bounds are finite numbers or null for none (an
+   * infinite bound fails, as in PuLP). Spaces in the name become underscores, as PuLP makes them.
+   */
+  addVariable(name: string, lowBound: number | null = null, upBound: number | null = null, cat: Category = 'Continuous'): LpVariable {
+    if (typeof name !== 'string' || name === '') fail('LP_PARAM', 'a variable needs a name');
+    if (cat !== 'Continuous' && cat !== 'Integer' && cat !== 'Binary') fail('LP_PARAM', `cat is 'Continuous', 'Integer' or 'Binary', not ${String(cat)}`);
+    for (const [label, v] of [['lowBound', lowBound], ['upBound', upBound]] as const) {
+      if (v !== null && (typeof v !== 'number' || !Number.isFinite(v))) {
+        fail('LP_VALUE', `${name}: ${label} is ${String(v)}; a bound must be a finite number, or null for none`);
+      }
+    }
+    const v = cat === 'Binary' ? new LpVariable(MAKE, this, name.replace(/\s/g, '_'), 0, 1, cat) : new LpVariable(MAKE, this, name.replace(/\s/g, '_'), lowBound, upBound, cat);
+    this.vars.push(v);
+    return v;
+  }
+
+  /**
+   * PuLP's `prob += …`: a constraint is added (named, or `_C1`, `_C2` … as PuLP names them); anything else becomes the
    * objective, replacing any before it.
    */
   add(item: LpConstraint | Term, name?: string): this {
@@ -245,53 +301,75 @@ export class LpProblem {
   }
 
   setObjective(term: Term): void {
-    this.objective = termOf(term);
+    const e = termOf(term);
+    this.ownTerms(e);
+    this.objective = e;
   }
 
-  addConstraint(constraint: LpConstraint, name?: string): void {
+  addConstraint(constraint: LpConstraint, name?: string): LpConstraint {
     if (!(constraint instanceof LpConstraint)) fail('LP_PARAM', 'addConstraint takes a constraint: build one with le(), ge() or eq()');
-    const key = name ?? `_C${this.constraints.size + 1}`;
-    if (this.constraints.has(key)) fail('LP_PARAM', `a constraint named '${key}' is already in the problem`);
+    this.ownTerms(constraint.expression);
+    const key = name ?? `_C${this.cons.length + 1}`;
+    if (this.byName.has(key)) fail('LP_PARAM', `a constraint named '${key}' is already in the problem`);
     constraint.name = key;
-    this.constraints.set(key, constraint);
+    this.cons.push(constraint);
+    this.byName.set(key, constraint);
+    return constraint;
   }
 
-  /** The variables in the objective and the constraints, in the order they first appear. */
+  /** Every variable added to the problem, in order, used or not. */
   variables(): LpVariable[] {
-    const seen = new Set<LpVariable>();
-    if (this.objective) for (const v of this.objective.terms.keys()) seen.add(v);
-    for (const c of this.constraints.values()) for (const v of c.expression.terms.keys()) seen.add(v);
-    const names = new Map<string, LpVariable>();
-    for (const v of seen) {
-      const other = names.get(v.name);
-      if (other && other !== v) fail('LP_PARAM', `two different variables are named '${v.name}'`);
-      names.set(v.name, v);
-    }
-    return [...seen];
+    return [...this.vars];
+  }
+
+  /** The constraints, in the order they were added. */
+  constraints(): LpConstraint[] {
+    return [...this.cons];
+  }
+
+  /** The constraint with this name, or null. */
+  getConstraintByName(name: string): LpConstraint | null {
+    return this.byName.get(name) ?? null;
+  }
+
+  numVariables(): number {
+    return this.vars.length;
+  }
+
+  numConstraints(): number {
+    return this.cons.length;
+  }
+
+  /** Whether any variable is integer or binary. */
+  isMIP(): boolean {
+    return this.vars.some((v) => v.cat !== 'Continuous');
   }
 
   /**
    * Solves the problem, and sets each variable's `varValue` and `dj` and each constraint's `pi` and `slack`. Resolves
-   * to the status, as PuLP's solve() returns it. The asynchronous call gives exactly {@link solveSync}'s result.
+   * to the solve's stats, as PuLP 4.2's solve() returns them. The asynchronous call gives exactly
+   * {@link solveSync}'s result, its time aside.
    */
-  async solve(options: SolveOptions = {}): Promise<number> {
+  async solve(options: SolveOptions = {}): Promise<LpSolveStats> {
     return this.solveSync(options);
   }
 
   /** {@link solve}, synchronously. */
-  solveSync(options: SolveOptions = {}): number {
-    const vars = this.variables();
-    for (const v of vars) {
-      if (v.cat !== 'Continuous') fail('LP_UNSUPPORTED', `${v.name} is ${v.cat}: integer variables come with milp() in phase 2`);
+  solveSync(options: SolveOptions = {}): LpSolveStats {
+    const start = performance.now();
+    if (this.isMIP()) {
+      const v = this.vars.find((x) => x.cat !== 'Continuous')!;
+      fail('LP_UNSUPPORTED', `${v.name} is ${v.cat}: integer variables come with milp() in phase 2`);
     }
     const tol = options.tol ?? 1e-7;
     if (typeof tol !== 'number' || !(tol > 0) || tol >= 1) fail('LP_PARAM', `tol must be above 0 and below 1, not ${String(tol)}`);
     const maxIter = options.maxIter ?? 2 ** 31 - 1;
     if (!Number.isInteger(maxIter) || maxIter < 0) fail('LP_PARAM', `maxIter must be a whole number, 0 or more, not ${String(maxIter)}`);
 
+    const vars = this.vars;
     const n = vars.length;
     const index = new Map(vars.map((v, j) => [v, j]));
-    const sign = this.sense === 'maximize' ? -1 : 1;
+    const sign = this.sense === LpMaximize ? -1 : 1;
     const c = new Float64Array(n);
     if (this.objective) for (const [v, a] of this.objective.terms) c[index.get(v)!]! += sign * a;
     const colLo = new Float64Array(n);
@@ -300,7 +378,7 @@ export class LpProblem {
       colLo[j] = v.lowBound ?? -Infinity;
       colUp[j] = v.upBound ?? Infinity;
     });
-    const cons = [...this.constraints.values()];
+    const cons = this.cons;
     const m = cons.length;
     const ii: number[] = [];
     const jj: number[] = [];
@@ -315,8 +393,8 @@ export class LpProblem {
         vv.push(a);
       }
       const rhs = con.rhs;
-      rowLo[r] = con.sense === 'le' ? -Infinity : rhs;
-      rowUp[r] = con.sense === 'ge' ? Infinity : rhs;
+      rowLo[r] = con.sense === LpConstraintLE ? -Infinity : rhs;
+      rowUp[r] = con.sense === LpConstraintGE ? Infinity : rhs;
     });
 
     for (const v of vars) {
@@ -327,12 +405,15 @@ export class LpProblem {
       con.pi = null;
       con.slack = null;
     }
-    if (vars.some((v) => v.lowBound !== null && v.upBound !== null && v.lowBound > v.upBound)) return (this.status = -1);
+    const stats = (status: SolveStatus, objective: number | null): LpSolveStats => ({
+      solver: 'smaltlp', status, statusStr: statusName(status), hasSolution: status === LpSolveStatus.Optimal, objective,
+      numVariables: n, numConstraints: m, isMip: false, time: (performance.now() - start) / 1000,
+    });
+    if (vars.some((v) => v.lowBound !== null && v.upBound !== null && v.lowBound > v.upBound)) return stats(LpSolveStatus.Infeasible, null);
 
     const A = fromTriplets(m, n, ii, jj, vv);
     const res = dualSimplex({ A, c, colLo, colUp, rowLo, rowUp }, { maxIter, primalTol: tol, dualTol: tol });
-    this.status = STATUS[res.status];
-    if (res.status !== 0) return this.status;
+    if (res.status !== 0) return stats(STATUS[res.status], null);
     vars.forEach((v, j) => {
       v.varValue = res.x[j]!;
       v.dj = sign * res.d[j]!;
@@ -340,14 +421,30 @@ export class LpProblem {
     cons.forEach((con, r) => {
       const activity = res.x[n + r]!;
       con.pi = sign * res.d[n + r]!;
-      con.slack = con.sense === 'le' ? con.rhs - activity : con.sense === 'ge' ? activity - con.rhs : 0;
+      con.slack = con.sense === LpConstraintLE ? con.rhs - activity : con.sense === LpConstraintGE ? activity - con.rhs : 0;
     });
-    return this.status;
+    return stats(LpSolveStatus.Optimal, value(this.objective) ?? 0);
+  }
+
+  /** Every variable in an expression must be this problem's, as PuLP 4.2 requires. */
+  private ownTerms(e: LpAffineExpression): void {
+    for (const v of e.terms.keys()) {
+      if (v.problem !== this) fail('LP_PARAM', `${v.name} belongs to another problem ('${v.problem.name}'); a problem uses only its own variables`);
+    }
   }
 }
 
-/** linprog's status codes to PuLP's. */
-const STATUS: Record<Status, number> = { 0: 1, 1: 0, 2: -1, 3: -2, 4: -3 };
+/**
+ * linprog's status codes to PuLP 4.2's. The iteration limit and numerical trouble map to IterationLimit and
+ * NumericalError, the codes PuLP 4.2 has for them; the compare tests check Optimal, Infeasible and Unbounded.
+ */
+const STATUS: Record<Status, SolveStatus> = {
+  0: LpSolveStatus.Optimal,
+  1: LpSolveStatus.IterationLimit,
+  2: LpSolveStatus.Infeasible,
+  3: LpSolveStatus.Unbounded,
+  4: LpSolveStatus.NumericalError,
+};
 
 /** A term as an expression. */
 function termOf(t: Term): LpAffineExpression {

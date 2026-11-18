@@ -116,7 +116,7 @@ def model_case(spec):
         rel = {'le': lhs <= con['rhs'], 'ge': lhs >= con['rhs'], 'eq': lhs == con['rhs']}[con['sense']]
         prob += rel, con['name']
     stats = prob.solve(pulp.HiGHS(msg=0))
-    out = {'status': int(stats.status)}
+    out = {'status': int(stats.status), 'statusStr': stats.status_str, 'hasSolution': bool(stats.has_solution)}
     if stats.status == 1:
         out['objective'] = num(pulp.value(prob.objective))
         if spec.get('unique'):

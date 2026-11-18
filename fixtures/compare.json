@@ -15709,6 +15709,8 @@
    },
    "pulp": {
     "status": 1,
+    "statusStr": "Optimal",
+    "hasSolution": true,
     "objective": 36.0,
     "varValue": {
      "x": 2.0,
@@ -15778,6 +15780,8 @@
    },
    "pulp": {
     "status": 1,
+    "statusStr": "Optimal",
+    "hasSolution": true,
     "objective": 9.0,
     "varValue": {
      "a": 3.0,
@@ -15860,6 +15864,8 @@
    },
    "pulp": {
     "status": 1,
+    "statusStr": "Optimal",
+    "hasSolution": true,
     "objective": 63.739999999999995,
     "varValue": {
      "bread": 10.0,
@@ -15908,7 +15914,9 @@
     ]
    },
    "pulp": {
-    "status": -1
+    "status": -1,
+    "statusStr": "Infeasible",
+    "hasSolution": false
    }
   },
   {
@@ -15936,7 +15944,9 @@
     ]
    },
    "pulp": {
-    "status": -2
+    "status": -2,
+    "statusStr": "Unbounded",
+    "hasSolution": false
    }
   }
  ],
