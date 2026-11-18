@@ -99,6 +99,11 @@ def linprog_cases():
         linprog_case('infeasible equalities', [1, 1], A_eq=[[1, 1], [1, 1]], b_eq=[1, 2]),
         linprog_case('unbounded', [-1, -1], [[1, -1]], [1]),
         linprog_case('free and unbounded below', [1], bounds=[(None, None)]),
+        # Problems presolve reduces: a binding singleton row, fixed variables, a chain that removes everything.
+        linprog_case('singleton row binding', [-2, -1], [[1, 0], [1, 1]], [3, 5], unique=True),
+        linprog_case('fixed variable', [1, 2, -1], [[1, 1, 1], [0, 1, -1]], [10, 2], bounds=[(0, None), (1, 1), (0, 4)], unique=True),
+        linprog_case('presolve chain', [1, 1, -3], [[1, 1, 2]], [20], [[2, -1, 0], [0, 4, 0]], [2, 8], bounds=[(None, None), (None, None), (-10, 10)], unique=True),
+        linprog_case('singleton ranges on one column', [-1, 1], [[1, 0], [-1, 0], [2, 0], [1, 1]], [6, -1, 10, 8], unique=True),
     ]
     cases += [random_linprog(seed) for seed in range(1, 121)]
     return cases

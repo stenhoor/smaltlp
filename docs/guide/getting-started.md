@@ -49,5 +49,6 @@ VERSION
 ## What it solves now
 
 Linear programs, with continuous variables. Integer and binary variables can be declared, and solving them fails with
-`LP_UNSUPPORTED` until `milp()` arrives. There is no presolve yet. See [Where smaltlp differs](../reference/divergences)
+`LP_UNSUPPORTED` until `milp()` arrives. A presolve removes empty rows, fixed variables and singleton rows first. See
+[Where smaltlp differs](../reference/divergences)
 and, for how long solves take, the [benchmarks](../research/benchmarks).

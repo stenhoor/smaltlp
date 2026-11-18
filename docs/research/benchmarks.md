@@ -16,7 +16,8 @@ so one can be set. No speed claim about smaltlp stands without a benchmark here 
   about 10% of the matrix non-zero. These are our own problems, small and well scaled: easier than Netlib's, which
   come later.
 - **smaltlp:** the built package (`dist/`), in Node, `linprogSync` on the problem read with `readMps`: one thread, its
-  dual simplex with a sparse LU, no presolve.
+  dual simplex with a sparse LU, after its presolve. These problems have no empty or singleton rows and no fixed
+  variables, so the presolve removes nothing from them: this benchmark doesn't measure it.
 - **HiGHS:** highspy, the version pinned in `compare/requirements.txt`, in two settings: its defaults (presolve, its
   choice of solver), and the work smaltlp does: the serial dual simplex (`simplex_strategy` 1) without presolve. The
   solver is cleared before every run, so no basis carries over.
@@ -33,9 +34,9 @@ so one can be set. No speed claim about smaltlp stands without a benchmark here 
 
 | Problem | Rows × columns | smaltlp, ms | HiGHS, defaults, ms | HiGHS, serial dual simplex, no presolve, ms | smaltlp ÷ HiGHS, defaults | smaltlp ÷ HiGHS, serial dual simplex, no presolve | Iterations: smaltlp | Iterations: HiGHS, defaults | Iterations: HiGHS, serial dual simplex, no presolve |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| lp-50x75 | 50 × 75 | 2.34 | 0.69 | 0.32 | 3.4× | 7.4× | 23 | 29 | 28 |
-| lp-150x225 | 150 × 225 | 8.14 | 3.10 | 1.55 | 2.6× | 5.3× | 55 | 73 | 73 |
-| lp-300x450 | 300 × 450 | 25.3 | 7.40 | 3.19 | 3.4× | 7.9× | 93 | 77 | 77 |
+| lp-50x75 | 50 × 75 | 2.06 | 0.57 | 0.22 | 3.6× | 9.2× | 23 | 29 | 28 |
+| lp-150x225 | 150 × 225 | 8.02 | 2.57 | 1.27 | 3.1× | 6.3× | 55 | 73 | 73 |
+| lp-300x450 | 300 × 450 | 21.8 | 5.90 | 2.51 | 3.7× | 8.7× | 93 | 77 | 77 |
 
 Run 2026-11-18: smaltlp 0.14.0 on Node 22.23.5; HiGHS 1.16.0 (highspy) on Python 3.13.18. CPU: Intel(R) Xeon(R) Processor @ 2.10GHz. Every objective agrees within 1e-7, relative.
 

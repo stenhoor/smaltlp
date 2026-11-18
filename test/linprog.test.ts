@@ -152,3 +152,41 @@ test('a dual ray that leans on an artificial bound grows the box, then finds the
   optimal(r);
   near(r.fun, -2e7);
 });
+
+test('presolve: a binding singleton row keeps its dual, with presolve on or off', () => {
+  // max 2x + y: x ≤ 3 (a row with one entry), x + y ≤ 5. x = 3, y = 2; both rows bind, each worth 1.
+  for (const presolve of [true, false]) {
+    const r = linprogSync([-2, -1], { AUb: [[1, 0], [1, 1]], bUb: [3, 5], presolve });
+    optimal(r);
+    nearAll(r.x, [3, 2]);
+    nearAll(r.ineqlin!.marginals, [-1, -1]);
+    nearAll(r.lower!.marginals, [0, 0]);
+  }
+});
+
+test('presolve: a chain that removes the whole problem gives the same answer and duals that check', () => {
+  // The second equality row fixes y; then the first fixes x; then the inequality is one entry, in z.
+  const opts = { AUb: [[1, 1, 2]], bUb: [20], AEq: [[2, -1, 0], [0, 4, 0]], bEq: [2, 8], bounds: [[null, null], [null, null], [-10, 10]] as const };
+  const on = linprogSync([1, 1, -3], { ...opts, bounds: [...opts.bounds] });
+  const off = linprogSync([1, 1, -3], { ...opts, bounds: [...opts.bounds], presolve: false });
+  optimal(on);
+  optimal(off);
+  nearAll(on.x, Array.from(off.x!));
+  near(on.fun, off.fun!);
+  // x = 2, y = 2, z = 8: c − Aᵀy = 0 for every column, with the marginals presolve gives.
+  const yUb = on.ineqlin!.marginals;
+  const yEq = on.eqlin!.marginals;
+  const A = [[1, 1, 2], [2, -1, 0], [0, 4, 0]];
+  const ys = [yUb[0]!, yEq[0]!, yEq[1]!];
+  [1, 1, -3].forEach((cj, j) => near(cj - A.reduce((s, row, i) => s + row[j]! * ys[i]!, 0) - on.lower!.marginals[j]! - on.upper!.marginals[j]!, 0));
+});
+
+test('presolve: an empty row whose range excludes 0 is infeasible', () => {
+  assert.equal(linprogSync([1, 1], { AEq: [[0, 0]], bEq: [1] }).status, 2);
+  assert.equal(linprogSync([1, 1], { AEq: [[0, 0]], bEq: [1], presolve: false }).status, 2);
+  optimal(linprogSync([1, 1], { AUb: [[0, 0]], bUb: [1] }));
+});
+
+test('presolve must be true or false', () => {
+  assert.throws(() => linprogSync([1], { presolve: 'yes' as never }), (e: unknown) => e instanceof SmaltlpError && e.code === 'LP_PARAM');
+});

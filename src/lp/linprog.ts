@@ -6,7 +6,8 @@
  */
 import { fail } from '../core/errors.ts';
 import { multiply, shapeOf, stackCsc, type MatrixInput } from '../core/sparse.ts';
-import { dualSimplex, type Status } from './simplex.ts';
+import { solve } from './presolve.ts';
+import type { Status } from './simplex.ts';
 
 /** A variable's bounds, `[lower, upper]`: `null` (or ±Infinity) for none on that side. scipy's default is `[0, null]`. */
 export type Bound = readonly [number | null, number | null];
@@ -24,6 +25,8 @@ export interface LinprogOptions {
   maxIter?: number;
   /** Primal and dual feasibility tolerance. Default 1e-7. */
   tol?: number;
+  /** Simplify the problem before solving it (empty rows, fixed variables, singleton rows). Default true, as scipy's. */
+  presolve?: boolean;
   /** scipy's integrality: not in this release. `milp()` comes with phase 2 (ADR 0039, section 1). */
   integrality?: unknown;
 }
@@ -121,7 +124,9 @@ export function linprogSync(c: ArrayLike<number>, options: LinprogOptions = {}):
   });
   for (let j = 0; j < n; j++) if (colLo[j]! > colUp[j]!) return { ...empty(2), message: `The problem is infeasible: variable ${j}'s lower bound is above its upper bound.` };
 
-  const res = dualSimplex({ A, c: cost, colLo, colUp, rowLo, rowUp }, { maxIter, primalTol: tol, dualTol: tol });
+  const presolve = options.presolve ?? true;
+  if (typeof presolve !== 'boolean') fail('LP_PARAM', `presolve is true or false, not ${String(presolve)}`);
+  const res = solve({ A, c: cost, colLo, colUp, rowLo, rowUp }, { maxIter, primalTol: tol, dualTol: tol, presolve });
   if (res.status !== 0) return { ...empty(res.status), nit: res.nit };
 
   const x = res.x.slice(0, n);

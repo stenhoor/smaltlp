@@ -25,7 +25,8 @@
  */
 import { fail } from '../core/errors.ts';
 import { fromTriplets } from '../core/sparse.ts';
-import { dualSimplex, type Status } from '../lp/simplex.ts';
+import { solve } from '../lp/presolve.ts';
+import type { Status } from '../lp/simplex.ts';
 
 /** Minimize: PuLP's LpMinimize, 1. */
 export const LpMinimize = 1;
@@ -239,6 +240,8 @@ export interface SolveOptions {
   maxIter?: number;
   /** Primal and dual feasibility tolerance. Default 1e-7. */
   tol?: number;
+  /** Simplify the problem before solving it. Default true. */
+  presolve?: boolean;
 }
 
 /** What a solve reports: PuLP 4.2's LpSolveStats, the fields smaltlp has, in camelCase. */
@@ -412,7 +415,9 @@ export class LpProblem {
     if (vars.some((v) => v.lowBound !== null && v.upBound !== null && v.lowBound > v.upBound)) return stats(LpSolveStatus.Infeasible, null);
 
     const A = fromTriplets(m, n, ii, jj, vv);
-    const res = dualSimplex({ A, c, colLo, colUp, rowLo, rowUp }, { maxIter, primalTol: tol, dualTol: tol });
+    const presolve = options.presolve ?? true;
+    if (typeof presolve !== 'boolean') fail('LP_PARAM', `presolve is true or false, not ${String(presolve)}`);
+    const res = solve({ A, c, colLo, colUp, rowLo, rowUp }, { maxIter, primalTol: tol, dualTol: tol, presolve });
     if (res.status !== 0) return stats(STATUS[res.status], null);
     vars.forEach((v, j) => {
       v.varValue = res.x[j]!;
