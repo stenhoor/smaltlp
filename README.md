@@ -23,18 +23,18 @@ res.x; // Float64Array [10, -3]
 res.fun; // -22
 ```
 
-Or build the model by name, in PuLP's style:
+Or build the model by name, in PuLP 4.2's style:
 
 ```ts
-import { LpProblem, LpVariable, LpStatus, value } from '@smaltworks/smaltlp/model';
+import { LpProblem, LpMaximize, value } from '@smaltworks/smaltlp/model';
 
-const prob = new LpProblem('plan', 'maximize');
-const x = new LpVariable('x', { lowBound: 0 });
-const y = new LpVariable('y', { lowBound: 0 });
+const prob = new LpProblem('plan', LpMaximize);
+const x = prob.addVariable('x', 0);
+const y = prob.addVariable('y', 0);
 prob.add(x.times(3).plus(y.times(5))); // the objective
-const plant3 = x.times(3).plus(y.times(2)).le(18);
-prob.add(x.le(4), 'plant1').add(y.times(2).le(12), 'plant2').add(plant3, 'plant3');
-LpStatus[await prob.solve()]; // 'Optimal'
+const plant3 = prob.addConstraint(x.times(3).plus(y.times(2)).le(18), 'plant3');
+prob.add(x.le(4), 'plant1').add(y.times(2).le(12), 'plant2');
+const stats = await prob.solve(); // stats.statusStr: 'Optimal'
 [x.varValue, y.varValue, value(prob.objective)]; // [2, 6, 36]
 plant3.pi; // 1: the objective's gain per unit more of plant 3
 ```

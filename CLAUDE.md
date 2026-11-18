@@ -58,8 +58,9 @@ The family's rules: one task per branch and pull request; open it once CI passes
 - **No number without its benchmark.** A speed claim names the benchmark that measured it, which anyone can rerun.
 - **Layout:** `src/core/` holds what every solver shares (`errors.ts`, `sparse.ts` for CSC matrices, `basis.ts` for
   the basis factorization); `src/lp/` holds linear programs (`simplex.ts`, the dual simplex; `linprog.ts`, scipy's
-  interface); `src/model/` is the modelling layer in PuLP's style (`LpProblem`, `LpVariable`, PuLP's names and status
-  codes), solved by the same dual simplex; `src/io/` reads model files (`mps.ts`, MPS free and fixed, and
+  interface); `src/model/` is the modelling layer in PuLP 4.2's style (the owner, 2026-11-18: follow 4.2 only:
+  `prob.addVariable()`, `constraints()`, `LpSolveStats` and `LpSolveStatus`, in camelCase), solved by the same dual
+  simplex; `src/io/` reads model files (`mps.ts`, MPS free and fixed, and
   `mpsToProblem()`). Each area with its own `index.ts` is an entry point in `package.json`
   `exports`.
 - **Compare tests** (ADR 0039, section 6): `compare/run.py` runs every case through scipy's linprog (HiGHS), PuLP

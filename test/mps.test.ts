@@ -50,7 +50,7 @@ test('a small MPS file: rows, columns, RHS and bounds', () => {
 
 test('a small MPS file solves: 16, at x = 0, y = -1, z = 6', () => {
   const prob = mpsToProblem(readMps(TESTPROB));
-  assert.equal(prob.solveSync(), 1);
+  assert.equal(prob.solveSync().status, 1);
   near(value(prob.objective), 16);
   const [x, y, z] = prob.variables();
   near(x!.varValue, 0);
@@ -166,7 +166,7 @@ ENDATA`);
   assert.deepEqual([...m.rowUp], [3]);
   assert.deepEqual([...m.colUp], [2]);
   const prob = mpsToProblem(m);
-  assert.equal(prob.solveSync(), 1);
+  assert.equal(prob.solveSync().status, 1);
   near(value(prob.objective), 4);
 });
 
@@ -182,8 +182,8 @@ RHS
 RANGES
  rng cap 4
 ENDATA`));
-  assert.deepEqual([...prob.constraints.keys()], ['cap', 'cap_range']);
-  assert.equal(prob.solveSync(), 1);
+  assert.deepEqual(prob.constraints().map((c) => c.name), ['cap', 'cap_range']);
+  assert.equal(prob.solveSync().status, 1);
   near(value(prob.objective), -10);
 });
 

@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { linprogSync, type Bound } from '../src/index.ts';
 import { mpsToProblem, readMps } from '../src/io/index.ts';
-import { LpProblem, LpVariable, lpSum, value } from '../src/model/index.ts';
+import { LpMaximize, LpMinimize, LpProblem, type LpConstraint, type LpVariable, lpSum, value } from '../src/model/index.ts';
 
 type Num = number | 'Infinity' | '-Infinity';
 const fixtures = JSON.parse(readFileSync(new URL('../fixtures/compare.json', import.meta.url), 'utf8'));
@@ -56,20 +56,23 @@ test(`linprog against scipy ${fixtures.reference.scipy} (HiGHS): ${fixtures.linp
 
 test(`the modelling layer against PuLP ${fixtures.reference.pulp}: ${fixtures.model.length} cases`, () => {
   for (const { spec, pulp } of fixtures.model) {
-    const prob = new LpProblem(spec.name, spec.sense);
+    const prob = new LpProblem(spec.name, spec.sense === 'maximize' ? LpMaximize : LpMinimize);
     const vars: Record<string, LpVariable> = {};
-    for (const v of spec.variables) vars[v.name] = new LpVariable(v.name, { lowBound: v.lowBound ?? null, upBound: v.upBound ?? null });
+    for (const v of spec.variables) vars[v.name] = prob.addVariable(v.name, v.lowBound ?? null, v.upBound ?? null);
     prob.add(lpSum(Object.entries(spec.objective as Record<string, number>).map(([n, k]) => vars[n]!.times(k))));
-    const cons: Record<string, ReturnType<LpVariable['le']>> = {};
+    const cons: Record<string, LpConstraint> = {};
     for (const c of spec.constraints) {
       const lhs = lpSum(Object.entries(c.terms as Record<string, number>).map(([n, k]) => vars[n]!.times(k)));
       cons[c.name] = c.sense === 'le' ? lhs.le(c.rhs) : c.sense === 'ge' ? lhs.ge(c.rhs) : lhs.eq(c.rhs);
       prob.add(cons[c.name]!, c.name);
     }
-    const status = prob.solveSync();
-    assert.equal(status, pulp.status, `${spec.name}: status ${status}, PuLP ${pulp.status}`);
+    const stats = prob.solveSync();
+    assert.equal(stats.status, pulp.status, `${spec.name}: status ${stats.status}, PuLP ${pulp.status}`);
+    assert.equal(stats.statusStr, pulp.statusStr, `${spec.name}: statusStr`);
+    assert.equal(stats.hasSolution, pulp.hasSolution, `${spec.name}: hasSolution`);
     if (pulp.status !== 1) continue;
     close(value(prob.objective), pulp.objective, `${spec.name}: objective`);
+    close(stats.objective, pulp.objective, `${spec.name}: stats.objective`);
     if (!spec.unique) continue;
     for (const [n, v] of Object.entries(pulp.varValue as Record<string, Num>)) close(vars[n]!.varValue, v, `${spec.name}: ${n}.varValue`);
     for (const [n, v] of Object.entries(pulp.dj as Record<string, Num>)) close(vars[n]!.dj, v, `${spec.name}: ${n}.dj`);
@@ -91,7 +94,7 @@ test(`readMps against HiGHS ${fixtures.reference.highspy}'s reader: ${fixtures.m
     assert.deepEqual([...m.integer], highs.integer, `${name}: integer`);
     if (highs.objective !== undefined) {
       const prob = mpsToProblem(m);
-      assert.equal(prob.solveSync(), 1, `${name}: status`);
+      assert.equal(prob.solveSync().status, 1, `${name}: status`);
       close(value(prob.objective), highs.objective, `${name}: objective`);
     }
   }
