@@ -1,145 +1,291 @@
 /**
- * The basis factorization the simplex method solves with: B = Pᵀ L U, by Gaussian elimination with partial pivoting,
- * and the product form for the bases that follow, one eta column per change of basis, until the next
- * refactorization.
+ * The basis factorization the simplex method solves with: a sparse LU of the basis matrix B, found by Gaussian
+ * elimination with Markowitz pivoting and a threshold test, and the product form for the bases that follow, one sparse
+ * eta column per change of basis, until the next refactorization (smaltworks ADR 0039, section 4).
  *
- * This first version keeps L and U dense: O(m²) memory and O(m³) work to factor, which suits the small models of
- * phase 1's first slice. A sparse LU (Markowitz pivoting, Forrest–Tomlin updates) replaces it later, behind the same
- * methods (smaltworks ADR 0039, section 4).
+ * Elimination step k picks a pivot (row p_k, column q_k) from the active submatrix: among the few columns and rows with
+ * the fewest entries, the entry with the smallest Markowitz count (r − 1)(c − 1) whose size is at least THRESHOLD times
+ * its column's largest, which bounds growth. It subtracts multiples of row p_k from the other rows with an entry in
+ * column q_k (L, the multipliers) and keeps row p_k (U). FTRAN and BTRAN then run through L and U in step order, with
+ * no dense matrix anywhere.
+ *
+ * Written from the published method (Markowitz, 1957; Duff, Erisman and Reid, Direct Methods for Sparse Matrices; Suhl
+ * and Suhl, ORSA Journal on Computing, 1990), not from any solver's code.
  * @module
  */
 
-/** A basis matrix is singular, or too close to it to factor: its pivot was below this, relative to its column. */
+/** A pivot below this fraction of its column's largest entry isn't taken: it would let rounding grow. */
+export const THRESHOLD = 0.1;
+/** A column whose largest entry is below this is treated as zero: the basis is singular to working precision. */
 export const SINGULAR = 1e-11;
+/** How many of the shortest columns and rows the pivot search looks at, each step. */
+const SEARCH = 4;
+
+/** One column of B, sparse: entry k is `value[k]` at row `index[k]`. */
+export interface SparseColumn {
+  index: ArrayLike<number>;
+  value: ArrayLike<number>;
+}
 
 /** The factorization of a basis matrix B (m × m) and the changes of basis since. */
 export class BasisFactor {
   readonly m: number;
-  /** L (below the diagonal, unit diagonal implied) and U (on and above it), row-major. */
-  private lu: Float64Array;
-  /** Row i of P B is row perm[i] of B. */
-  private perm: Int32Array;
-  /** The product form: for each change of basis, the row it replaced and the entering column B⁻¹ a_q. */
-  private etaRow: number[] = [];
-  private etaCol: Float64Array[] = [];
+  /** Step k's pivot row and column. */
+  private pivotRow = new Int32Array(0);
+  private pivotCol = new Int32Array(0);
+  /** Step k's multipliers: rows Lrow[Lstart[k] … Lstart[k+1]) each lost Lval times row p_k. */
+  private Lstart = new Int32Array(1);
+  private Lrow = new Int32Array(0);
+  private Lval = new Float64Array(0);
+  /** Step k's U row (row p_k as it was when pivoted): its pivot, then its other entries' columns and values. */
+  private Upivot = new Float64Array(0);
+  private Ustart = new Int32Array(1);
+  private Ucol = new Int32Array(0);
+  private Uval = new Float64Array(0);
+  /** The product form: for each change of basis, the position it replaced and the entering column's nonzeros. */
+  private etaPos: number[] = [];
+  private etaPivot: number[] = [];
+  private etaIndex: Int32Array[] = [];
+  private etaValue: Float64Array[] = [];
+  /** Work space for ftran and btran, kept between calls. */
+  private readonly work: Float64Array;
+  private readonly work2: Float64Array;
 
   constructor(m: number) {
     this.m = m;
-    this.lu = new Float64Array(m * m);
-    this.perm = new Int32Array(m);
+    this.work = new Float64Array(m);
+    this.work2 = new Float64Array(m);
   }
 
   /** The number of changes of basis since the last factorization. */
   get updates(): number {
-    return this.etaRow.length;
+    return this.etaPos.length;
+  }
+
+  /** The number of entries in L and U: a measure of fill-in. */
+  get entries(): number {
+    return this.Lrow.length + this.Ucol.length + this.m;
   }
 
   /**
-   * Factors B, given row-major (B[r * m + i] is row r of column i). Returns false where B is singular to working
-   * precision, and leaves the previous factorization unusable.
+   * Factors B, given as its m columns. Returns false where B is singular to working precision, and leaves the previous
+   * factorization unusable.
    */
-  factor(B: Float64Array): boolean {
+  factor(columns: readonly SparseColumn[]): boolean {
     const m = this.m;
-    const a = this.lu;
-    a.set(B);
-    for (let i = 0; i < m; i++) this.perm[i] = i;
-    this.etaRow = [];
-    this.etaCol = [];
-    for (let k = 0; k < m; k++) {
-      // The column's largest entry, at or below the diagonal, is the pivot.
-      let piv = k;
-      let big = Math.abs(a[k * m + k]!);
-      let colMax = big;
-      for (let i = k + 1; i < m; i++) {
-        const v = Math.abs(a[i * m + k]!);
-        if (v > big) {
-          big = v;
-          piv = i;
-        }
-        if (v > colMax) colMax = v;
-      }
-      for (let i = 0; i < k; i++) colMax = Math.max(colMax, Math.abs(a[i * m + k]!));
-      if (big === 0 || big < SINGULAR * colMax) return false;
-      if (piv !== k) {
-        for (let j = 0; j < m; j++) {
-          const t = a[k * m + j]!;
-          a[k * m + j] = a[piv * m + j]!;
-          a[piv * m + j] = t;
-        }
-        const t = this.perm[k]!;
-        this.perm[k] = this.perm[piv]!;
-        this.perm[piv] = t;
-      }
-      const d = a[k * m + k]!;
-      for (let i = k + 1; i < m; i++) {
-        const l = (a[i * m + k]! /= d);
-        if (l === 0) continue;
-        for (let j = k + 1; j < m; j++) a[i * m + j]! -= l * a[k * m + j]!;
+    this.etaPos = [];
+    this.etaPivot = [];
+    this.etaIndex = [];
+    this.etaValue = [];
+    // The active submatrix, by rows (column → value) and by columns (the rows with an entry).
+    const rows: Map<number, number>[] = Array.from({ length: m }, () => new Map());
+    const cols: Set<number>[] = Array.from({ length: m }, () => new Set());
+    for (let j = 0; j < m; j++) {
+      const c = columns[j]!;
+      for (let k = 0; k < c.index.length; k++) {
+        const v = c.value[k]!;
+        if (v === 0) continue;
+        const i = c.index[k]!;
+        rows[i]!.set(j, (rows[i]!.get(j) ?? 0) + v);
+        cols[j]!.add(i);
       }
     }
+    const rowDone = new Uint8Array(m);
+    const colDone = new Uint8Array(m);
+    const pivotRow = new Int32Array(m);
+    const pivotCol = new Int32Array(m);
+    const Lstart = [0];
+    const Lrow: number[] = [];
+    const Lval: number[] = [];
+    const Upivot = new Float64Array(m);
+    const Ustart = [0];
+    const Ucol: number[] = [];
+    const Uval: number[] = [];
+
+    const colMax = (j: number): number => {
+      let big = 0;
+      for (const i of cols[j]!) big = Math.max(big, Math.abs(rows[i]!.get(j)!));
+      return big;
+    };
+
+    for (let k = 0; k < m; k++) {
+      // The SEARCH shortest active columns and rows.
+      const shortCols = shortest(m, colDone, (j) => cols[j]!.size);
+      const shortRows = shortest(m, rowDone, (i) => rows[i]!.size);
+      if (shortCols.length === 0 || cols[shortCols[0]!]!.size === 0) return false;
+      let p = -1;
+      let q = -1;
+      let best = Infinity;
+      let bestSize = 0;
+      const consider = (i: number, j: number, a: number, cmax: number) => {
+        if (Math.abs(a) < THRESHOLD * cmax) return;
+        const cost = (rows[i]!.size - 1) * (cols[j]!.size - 1);
+        if (cost < best || (cost === best && Math.abs(a) > bestSize)) {
+          best = cost;
+          bestSize = Math.abs(a);
+          p = i;
+          q = j;
+        }
+      };
+      for (const j of shortCols) {
+        const cmax = colMax(j);
+        if (cmax < SINGULAR) return false;
+        for (const i of cols[j]!) consider(i, j, rows[i]!.get(j)!, cmax);
+        if (best === 0) break;
+      }
+      if (best !== 0) {
+        for (const i of shortRows) {
+          for (const [j, a] of rows[i]!) consider(i, j, a, colMax(j));
+          if (best === 0) break;
+        }
+      }
+      if (p < 0) return false;
+
+      // Eliminate: every other active row with an entry in column q loses l × row p.
+      const rowP = rows[p]!;
+      const d = rowP.get(q)!;
+      pivotRow[k] = p;
+      pivotCol[k] = q;
+      Upivot[k] = d;
+      for (const i of cols[q]!) {
+        if (i === p) continue;
+        const rowI = rows[i]!;
+        const l = rowI.get(q)! / d;
+        rowI.delete(q);
+        Lrow.push(i);
+        Lval.push(l);
+        for (const [j, u] of rowP) {
+          if (j === q) continue;
+          const v = (rowI.get(j) ?? 0) - l * u;
+          if (v === 0) {
+            rowI.delete(j);
+            cols[j]!.delete(i);
+          } else {
+            rowI.set(j, v);
+            cols[j]!.add(i);
+          }
+        }
+      }
+      Lstart.push(Lrow.length);
+      // Row p becomes step k's U row, and leaves the active submatrix with column q.
+      for (const [j, u] of rowP) {
+        cols[j]!.delete(p);
+        if (j === q) continue;
+        Ucol.push(j);
+        Uval.push(u);
+      }
+      Ustart.push(Ucol.length);
+      cols[q]!.clear();
+      rowDone[p] = 1;
+      colDone[q] = 1;
+    }
+
+    this.pivotRow = pivotRow;
+    this.pivotCol = pivotCol;
+    this.Lstart = Int32Array.from(Lstart);
+    this.Lrow = Int32Array.from(Lrow);
+    this.Lval = Float64Array.from(Lval);
+    this.Upivot = Upivot;
+    this.Ustart = Int32Array.from(Ustart);
+    this.Ucol = Int32Array.from(Ucol);
+    this.Uval = Float64Array.from(Uval);
     return true;
   }
 
-  /** Solves B x = a, overwriting and returning `a` (forward transformation, FTRAN). */
+  /** Solves B x = a (a by row, x by position), overwriting and returning `a` (forward transformation, FTRAN). */
   ftran(a: Float64Array): Float64Array {
     const m = this.m;
-    const lu = this.lu;
-    const b = new Float64Array(m);
-    for (let i = 0; i < m; i++) b[i] = a[this.perm[i]!]!;
-    for (let i = 0; i < m; i++) {
-      let s = b[i]!;
-      for (let k = 0; k < i; k++) s -= lu[i * m + k]! * b[k]!;
-      b[i] = s;
+    const { pivotRow, pivotCol, Lstart, Lrow, Lval, Upivot, Ustart, Ucol, Uval } = this;
+    // L: the elimination applied to the right-hand side.
+    for (let k = 0; k < m; k++) {
+      const v = a[pivotRow[k]!]!;
+      if (v === 0) continue;
+      for (let e = Lstart[k]!; e < Lstart[k + 1]!; e++) a[Lrow[e]!]! -= Lval[e]! * v;
     }
-    for (let i = m - 1; i >= 0; i--) {
-      let s = b[i]!;
-      for (let k = i + 1; k < m; k++) s -= lu[i * m + k]! * b[k]!;
-      b[i] = s / lu[i * m + i]!;
+    // U: back substitution, last step first; x[q_k] from row p_k (every entry is written).
+    const x = this.work;
+    for (let k = m - 1; k >= 0; k--) {
+      let s = a[pivotRow[k]!]!;
+      for (let e = Ustart[k]!; e < Ustart[k + 1]!; e++) s -= Uval[e]! * x[Ucol[e]!]!;
+      x[pivotCol[k]!] = s / Upivot[k]!;
     }
-    // The changes of basis, oldest first: each is E⁻¹, E being I with column r replaced by w.
-    for (let e = 0; e < this.etaRow.length; e++) {
-      const r = this.etaRow[e]!;
-      const w = this.etaCol[e]!;
-      const xr = b[r]! / w[r]!;
-      if (xr !== 0) for (let i = 0; i < m; i++) b[i]! -= w[i]! * xr;
-      b[r] = xr;
+    // The changes of basis, oldest first: each is E⁻¹, E being I with column r replaced by the entering column w.
+    for (let t = 0; t < this.etaPos.length; t++) {
+      const r = this.etaPos[t]!;
+      const xr = x[r]! / this.etaPivot[t]!;
+      if (xr !== 0) {
+        const idx = this.etaIndex[t]!;
+        const val = this.etaValue[t]!;
+        for (let e = 0; e < idx.length; e++) x[idx[e]!]! -= val[e]! * xr;
+      }
+      x[r] = xr;
     }
-    a.set(b);
+    a.set(x);
     return a;
   }
 
-  /** Solves Bᵀ y = e, overwriting and returning `e` (backward transformation, BTRAN). */
+  /** Solves Bᵀ y = e (e by position, y by row), overwriting and returning `e` (backward transformation, BTRAN). */
   btran(e: Float64Array): Float64Array {
     const m = this.m;
-    const lu = this.lu;
-    const z = e;
-    // The changes of basis, newest first: Eᵀ z' = z keeps every entry but r.
-    for (let k = this.etaRow.length - 1; k >= 0; k--) {
-      const r = this.etaRow[k]!;
-      const w = this.etaCol[k]!;
-      let s = z[r]!;
-      for (let i = 0; i < m; i++) if (i !== r) s -= w[i]! * z[i]!;
-      z[r] = s / w[r]!;
+    const { pivotRow, pivotCol, Lstart, Lrow, Lval, Upivot, Ustart, Ucol, Uval } = this;
+    // The changes of basis, newest first: Eᵀ z' = z changes only entry r.
+    for (let t = this.etaPos.length - 1; t >= 0; t--) {
+      const r = this.etaPos[t]!;
+      const idx = this.etaIndex[t]!;
+      const val = this.etaValue[t]!;
+      let s = e[r]!;
+      for (let k = 0; k < idx.length; k++) if (idx[k] !== r) s -= val[k]! * e[idx[k]!]!;
+      e[r] = s / this.etaPivot[t]!;
     }
-    // Bᵀ = Uᵀ Lᵀ P: solve Uᵀ u = z, then Lᵀ v = u, then y[perm[i]] = v[i].
-    const u = new Float64Array(m);
-    for (let i = 0; i < m; i++) {
-      let s = z[i]!;
-      for (let k = 0; k < i; k++) s -= lu[k * m + i]! * u[k]!;
-      u[i] = s / lu[i * m + i]!;
+    // Uᵀ v = e, in step order: v[p_k] from column q_k, then its U row's other columns lose its share.
+    const r = this.work;
+    r.set(e);
+    const v = this.work2;
+    for (let k = 0; k < m; k++) {
+      const vk = r[pivotCol[k]!]! / Upivot[k]!;
+      v[pivotRow[k]!] = vk;
+      if (vk === 0) continue;
+      for (let t = Ustart[k]!; t < Ustart[k + 1]!; t++) r[Ucol[t]!]! -= Uval[t]! * vk;
     }
-    for (let i = m - 1; i >= 0; i--) {
-      let s = u[i]!;
-      for (let k = i + 1; k < m; k++) s -= lu[k * m + i]! * u[k]!;
-      u[i] = s;
+    // y = Lᵀ-wise: the elimination steps transposed, last first.
+    for (let k = m - 1; k >= 0; k--) {
+      let s = v[pivotRow[k]!]!;
+      for (let t = Lstart[k]!; t < Lstart[k + 1]!; t++) s -= Lval[t]! * v[Lrow[t]!]!;
+      v[pivotRow[k]!] = s;
     }
-    for (let i = 0; i < m; i++) z[this.perm[i]!] = u[i]!;
-    return z;
+    e.set(v);
+    return e;
   }
 
-  /** Records a change of basis: the column at row r is replaced by one whose FTRAN is `alpha` (B⁻¹ a_q). */
+  /** Records a change of basis: the column at position r is replaced by one whose FTRAN is `alpha` (B⁻¹ a_q). */
   update(r: number, alpha: Float64Array): void {
-    this.etaRow.push(r);
-    this.etaCol.push(alpha.slice());
+    const idx: number[] = [];
+    const val: number[] = [];
+    for (let i = 0; i < alpha.length; i++) {
+      if (alpha[i] !== 0 && i !== r) {
+        idx.push(i);
+        val.push(alpha[i]!);
+      }
+    }
+    this.etaPos.push(r);
+    this.etaPivot.push(alpha[r]!);
+    this.etaIndex.push(Int32Array.from(idx));
+    this.etaValue.push(Float64Array.from(val));
   }
+}
+
+/** Up to SEARCH not-done indices with the smallest sizes, smallest first. */
+function shortest(m: number, done: Uint8Array, size: (i: number) => number): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < m; i++) {
+    if (done[i]) continue;
+    const s = size(i);
+    if (out.length < SEARCH || s < size(out[out.length - 1]!)) {
+      let at = out.length;
+      while (at > 0 && size(out[at - 1]!) > s) at--;
+      out.splice(at, 0, i);
+      if (out.length > SEARCH) out.pop();
+    }
+  }
+  return out;
 }

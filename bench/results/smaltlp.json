@@ -7,23 +7,23 @@
   "lp-50x75": {
    "rows": 50,
    "cols": 75,
-   "milliseconds": 1.8364490000000018,
+   "milliseconds": 2.342264,
    "iterations": 23,
    "objective": -1504.079960685977
   },
   "lp-150x225": {
    "rows": 150,
    "cols": 225,
-   "milliseconds": 11.790054999999995,
+   "milliseconds": 8.13582000000001,
    "iterations": 55,
    "objective": -4652.14388802732
   },
   "lp-300x450": {
    "rows": 300,
    "cols": 450,
-   "milliseconds": 110.79678000000001,
+   "milliseconds": 25.309887000000003,
    "iterations": 93,
-   "objective": -10004.171837948874
+   "objective": -10004.171837948876
   }
  }
 }

@@ -73,7 +73,7 @@ The site (https://stenhoor.github.io/smaltlp/) mirrors smaltml's (the owner, 202
   shiki,smaltworks,stage}.ts`, `smaltdb.css`) are copied unchanged from smalt-brand's `themes/vitepress/`.
 - **No number without its benchmark.** A speed claim names the benchmark that measured it, which anyone can rerun.
 - **Layout:** `src/core/` holds what every solver shares (`errors.ts`, `sparse.ts` for CSC matrices, `basis.ts` for
-  the basis factorization); `src/lp/` holds linear programs (`simplex.ts`, the dual simplex; `linprog.ts`, scipy's
+  the basis factorization: a sparse LU with Markowitz pivoting, and product-form updates); `src/lp/` holds linear programs (`simplex.ts`, the dual simplex; `linprog.ts`, scipy's
   interface); `src/model/` is the modelling layer in PuLP 4.2's style (the owner, 2026-11-18: follow 4.2 only:
   `prob.addVariable()`, `constraints()`, `LpSolveStats` and `LpSolveStatus`, in camelCase), solved by the same dual
   simplex; `src/io/` reads model files (`mps.ts`, MPS free and fixed, and

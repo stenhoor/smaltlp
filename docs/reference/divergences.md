@@ -16,8 +16,7 @@ fails with `LP_UNSUPPORTED`; it never answers differently.
   more than one RHS, RANGES or BOUNDS set.
 - **PuLP:** `add_variable_dict`, `add_variable_dicts` and `add_variable_matrix`; solver choice (smaltlp has its own);
   writing LP and MPS files from a problem.
-- **Size:** the basis factorization is dense, so each iteration costs O(m²) for m constraints. A sparse LU, and
-  presolve, come later.
+- **Presolve:** none yet, so a model is solved as it is written. It comes later.
 
 ## Different
 
