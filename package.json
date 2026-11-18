@@ -30,7 +30,10 @@
     "test:browser": "node test/browser/docs.mjs",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
-    "docs:preview": "vitepress preview docs"
+    "docs:preview": "vitepress preview docs",
+    "bench": "npm run build && node bench/smaltlp.mjs",
+    "bench:python": "python3 bench/reference.py",
+    "bench:report": "node bench/report.mjs"
   },
   "exports": {
     ".": {

@@ -40,6 +40,7 @@ The site (https://stenhoor.github.io/smaltlp/) mirrors smaltml's (the owner, 202
 | `npm run compare` | Reruns `compare/run.py` through scipy, PuLP and highspy (pinned in `compare/requirements.txt`) and rewrites `fixtures/compare.json` |
 | `npm run test:browser` | Builds the site and presses Run on every playground in headless Chromium (`test/browser/docs.mjs`). CI runs it |
 | `npm run docs:dev` / `docs:build` | The site (VitePress). Its examples run in place (`docs/.vitepress/theme/smaltlp.ts`); `test/docs-examples.test.ts` checks the table under each and type-checks each with smaltty, and `UPDATE_DOCS=1 npm test` writes the tables |
+| `npm run bench` / `bench:python` / `bench:report` | Times smaltlp and HiGHS on the same MPS problems (`bench/`), and writes `docs/research/benchmarks.md`. Rerun after solver work |
 | `npm run build` | `dist/` and type declarations, emitted by TypeScript 6.0.3 (`tsc`) for one more release (smaltty ADR 0030, decision 5) |
 
 ## Rules
