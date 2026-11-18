@@ -16,7 +16,7 @@ so one can be set. No speed claim about smaltlp stands without a benchmark here 
   about 10% of the matrix non-zero. These are our own problems, small and well scaled: easier than Netlib's, which
   come later.
 - **smaltlp:** the built package (`dist/`), in Node, `linprogSync` on the problem read with `readMps`: one thread, its
-  dual simplex with a dense LU, no presolve.
+  dual simplex with a sparse LU, no presolve.
 - **HiGHS:** highspy, the version pinned in `compare/requirements.txt`, in two settings: its defaults (presolve, its
   choice of solver), and the work smaltlp does: the serial dual simplex (`simplex_strategy` 1) without presolve. The
   solver is cleared before every run, so no basis carries over.
@@ -33,9 +33,9 @@ so one can be set. No speed claim about smaltlp stands without a benchmark here 
 
 | Problem | Rows × columns | smaltlp, ms | HiGHS, defaults, ms | HiGHS, serial dual simplex, no presolve, ms | smaltlp ÷ HiGHS, defaults | smaltlp ÷ HiGHS, serial dual simplex, no presolve | Iterations: smaltlp | Iterations: HiGHS, defaults | Iterations: HiGHS, serial dual simplex, no presolve |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| lp-50x75 | 50 × 75 | 1.84 | 1.10 | 0.46 | 1.7× | 4.0× | 23 | 29 | 28 |
-| lp-150x225 | 150 × 225 | 11.8 | 4.44 | 1.63 | 2.7× | 7.2× | 55 | 73 | 73 |
-| lp-300x450 | 300 × 450 | 111 | 6.97 | 3.01 | 15.9× | 36.8× | 93 | 77 | 77 |
+| lp-50x75 | 50 × 75 | 2.34 | 0.69 | 0.32 | 3.4× | 7.4× | 23 | 29 | 28 |
+| lp-150x225 | 150 × 225 | 8.14 | 3.10 | 1.55 | 2.6× | 5.3× | 55 | 73 | 73 |
+| lp-300x450 | 300 × 450 | 25.3 | 7.40 | 3.19 | 3.4× | 7.9× | 93 | 77 | 77 |
 
 Run 2026-11-18: smaltlp 0.14.0 on Node 22.23.5; HiGHS 1.16.0 (highspy) on Python 3.13.18. CPU: Intel(R) Xeon(R) Processor @ 2.10GHz. Every objective agrees within 1e-7, relative.
 
@@ -44,8 +44,14 @@ Run 2026-11-18: smaltlp 0.14.0 on Node 22.23.5; HiGHS 1.16.0 (highspy) on Python
 ## What it shows
 
 Both solvers take a similar number of iterations (the table's last columns), so the difference is in what each
-iteration costs, and it grows with the rows: 4× HiGHS's serial dual simplex at 50 rows, 37× at 300. *Assumption, to be
-measured:* most of it is smaltlp's dense basis factorization, whose solves cost O(m²) per iteration and whose
-refactorizations cost O(m³), where HiGHS's are sparse. A sparse LU (ADR 0039, section 4) is the step that addresses it,
-and this page is how its gain will be measured. One machine, one run of each: the cloud VM these ran on varies between
-runs, so read the ratios, not the last digit.
+iteration costs.
+
+- **The sparse LU** (2026-11-18) replaced a dense one, whose solves cost O(m²) per iteration and whose
+  refactorizations cost O(m³). On the same problems and the same VM, the dense LU's run (the first version of this
+  page, in git) took 1.84, 11.8 and 111 ms. The gain grows with the rows, as the dense LU's cost did; the smallest
+  problem is no faster.
+- **The smallest problem's time is mostly warm-up.** Each time is the median after a single warm-up run, and a solve
+  of the 50-row problem takes well under a millisecond once the JavaScript engine has compiled it. The method stays as
+  it is, so runs compare.
+- **One machine, one run of each:** the cloud VM these ran on varies between runs, so read the ratios, not the last
+  digit.

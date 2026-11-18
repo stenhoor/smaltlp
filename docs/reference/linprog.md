@@ -59,7 +59,8 @@ A `LinprogResult`, scipy's fields:
 ## Notes
 
 Solved by a bounded dual simplex in 64-bit floats: dual steepest edge pricing, the bound-flipping ratio test and
-Harris's two passes, over a dense LU of the basis with product-form updates. Results agree with scipy's (HiGHS) within
+Harris's two passes, over a sparse LU of the basis (Markowitz pivoting with a threshold test) with product-form
+updates. Results agree with scipy's (HiGHS) within
 1e-7 in the compare tests: the status and `fun` of every case, and `x` and the marginals where the optimum is unique.
 Where several solutions are optimal, `x` may be another of them. The asynchronous call gives exactly the synchronous
 result.

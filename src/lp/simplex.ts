@@ -20,7 +20,7 @@
  * Techniques of the Simplex Method, 2003), not from any solver's code.
  * @module
  */
-import { BasisFactor } from '../core/basis.ts';
+import { BasisFactor, type SparseColumn } from '../core/basis.ts';
 import type { Csc } from '../core/sparse.ts';
 
 /** A linear program in computational form. */
@@ -152,15 +152,15 @@ class DualSimplex {
   // Basis, primal values and reduced costs
 
   private refactor(): boolean {
-    const m = this.m;
-    const B = new Float64Array(m * m);
-    const col = new Float64Array(m);
-    for (let i = 0; i < m; i++) {
-      col.fill(0);
-      this.addColumn(this.head[i]!, 1, col);
-      for (let r = 0; r < m; r++) B[r * m + i] = col[r]!;
+    // The basis's columns, sparse: a structural's column of A, or a logical's −e_r.
+    const A = this.A;
+    const cols: SparseColumn[] = [];
+    for (let i = 0; i < this.m; i++) {
+      const j = this.head[i]!;
+      if (j >= this.n) cols.push({ index: [j - this.n], value: [-1] });
+      else cols.push({ index: A.index.subarray(A.start[j]!, A.start[j + 1]!), value: A.value.subarray(A.start[j]!, A.start[j + 1]!) });
     }
-    return this.factor.factor(B);
+    return this.factor.factor(cols);
   }
 
   /** The basic variables' values, from the nonbasic ones: B x_B = −N x_N. */

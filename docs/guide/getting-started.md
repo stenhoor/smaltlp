@@ -49,6 +49,5 @@ VERSION
 ## What it solves now
 
 Linear programs, with continuous variables. Integer and binary variables can be declared, and solving them fails with
-`LP_UNSUPPORTED` until `milp()` arrives. The basis factorization is dense for now, so each iteration costs O(m²) for
-m constraints: models of hundreds of constraints are its size today. See
-[Where smaltlp differs](../reference/divergences).
+`LP_UNSUPPORTED` until `milp()` arrives. There is no presolve yet. See [Where smaltlp differs](../reference/divergences)
+and, for how long solves take, the [benchmarks](../research/benchmarks).
