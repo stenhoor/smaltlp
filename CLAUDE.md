@@ -18,7 +18,10 @@ there.
 ## Workflow
 
 The family's rules: one task per branch and pull request; open it once CI passes; the owner merges. Before pushing,
-`npm run check`.
+`npm run check`, and `npm run test:browser` when the docs or their runner change.
+
+The site (https://stenhoor.github.io/smaltlp/) mirrors smaltml's (the owner, 2026-11-18) and deploys from
+`.github/workflows/docs.yml` only: the repository's Settings → Pages → Source must be **GitHub Actions**.
 
 - **Facts only.** Don't tell the owner something you haven't confirmed. Label everything else as an assumption, in
   those words, with what would confirm it.
@@ -35,6 +38,8 @@ The family's rules: one task per branch and pull request; open it once CI passes
 | `npm ci` | Installs dependencies, and builds `dist/` |
 | `npm run check` | Typecheck (TypeScript 7, the `typescript7` dev dependency), then the tests (`node --test`, on the TypeScript source: Node 22.18 and later strip its types) |
 | `npm run compare` | Reruns `compare/run.py` through scipy, PuLP and highspy (pinned in `compare/requirements.txt`) and rewrites `fixtures/compare.json` |
+| `npm run test:browser` | Builds the site and presses Run on every playground in headless Chromium (`test/browser/docs.mjs`). CI runs it |
+| `npm run docs:dev` / `docs:build` | The site (VitePress). Its examples run in place (`docs/.vitepress/theme/smaltlp.ts`); `test/docs-examples.test.ts` checks the table under each and type-checks each with smaltty, and `UPDATE_DOCS=1 npm test` writes the tables |
 | `npm run build` | `dist/` and type declarations, emitted by TypeScript 6.0.3 (`tsc`) for one more release (smaltty ADR 0030, decision 5) |
 
 ## Rules
@@ -52,9 +57,15 @@ The family's rules: one task per branch and pull request; open it once CI passes
   and a code.
 - **Erasable TypeScript only** (`erasableSyntaxOnly`): no enums, namespaces or parameter properties, so Node runs the
   source as it is. Relative imports name the `.ts` file; the build rewrites them to `.js`.
-- **No runtime dependencies.** Dev dependencies: TypeScript (6.0.3 and 7) and `@types/node`. The compare tests'
-  Python packages (highspy, scipy, PuLP) go in `compare/requirements.txt` with the first compare PR. Ask the owner
-  before adding any other package.
+- **No runtime dependencies.** Dev dependencies: TypeScript (6.0.3 and 7) and `@types/node`; for the site, as smaltml
+  has them (the owner, 2026-11-18): vitepress 1.6.4, smaltkit and smaltty (pinned to smaltml's commit and tag) and
+  playwright 1.64.1 (CI's version). The compare tests' Python packages are pinned in `compare/requirements.txt`. Ask the
+  owner before adding any other package.
+- **Every ```` ```ts ```` block in `docs/` runs where it stands,** in the kit's playground with this site's runner. A
+  page's examples share one scope, in order; the last line's value is the result, and the table under it is tested.
+  A tested result can't hold a time. `<!-- docs:error CODE -->` marks one that must fail; `<!-- docs:skip -->` marks
+  a block that isn't run (signatures, sketches). The site kit's files (`docs/.vitepress/theme/{agents,playground,
+  shiki,smaltworks,stage}.ts`, `smaltdb.css`) are copied unchanged from smalt-brand's `themes/vitepress/`.
 - **No number without its benchmark.** A speed claim names the benchmark that measured it, which anyone can rerun.
 - **Layout:** `src/core/` holds what every solver shares (`errors.ts`, `sparse.ts` for CSC matrices, `basis.ts` for
   the basis factorization); `src/lp/` holds linear programs (`simplex.ts`, the dual simplex; `linprog.ts`, scipy's

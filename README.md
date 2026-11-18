@@ -4,6 +4,8 @@
 
 **Small. Alternative. Optimal.** Linear and integer programming for smaltdb, in the browser.
 
+[Documentation](https://stenhoor.github.io/smaltlp/) · [Playground](https://stenhoor.github.io/smaltlp/playground) · [smaltworks.dev](https://smaltworks.dev)
+
 **Status: phase 1, first slice, under way** ([smaltworks ADR 0039](https://github.com/stenhoor/smaltworks/blob/main/adr/0039-smaltlp-scope-and-architecture.md)).
 `linprog()` solves linear programs with a bounded dual simplex: dual steepest edge pricing, the bound-flipping
 ratio test and Harris's two passes. Its LU factorization is dense for now, so each iteration costs O(m²) for m
@@ -69,6 +71,8 @@ result fields, duals (`marginals`) included. `integrality` fails with `LP_UNSUPP
 | --- | --- |
 | `npm ci` | Installs dependencies, and builds `dist/` |
 | `npm run check` | Typecheck (TypeScript 7), then the tests (`node --test`, on the TypeScript source) |
+| `npm run test:browser` | Builds the site and runs every playground in Chromium |
+| `npm run docs:dev` / `docs:build` | The documentation site |
 | `npm run build` | `dist/` and type declarations, emitted by TypeScript 6.0.3 |
 
 Node 22.18 or later.

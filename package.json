@@ -19,14 +19,18 @@
     "type": "git",
     "url": "git+https://github.com/stenhoor/smaltlp.git"
   },
-  "homepage": "https://github.com/stenhoor/smaltlp#readme",
+  "homepage": "https://stenhoor.github.io/smaltlp/",
   "scripts": {
     "typecheck": "node node_modules/typescript7/bin/tsc -p tsconfig.json --noEmit",
     "test": "node --test 'test/**/*.test.ts'",
     "check": "npm run typecheck && npm test",
     "build": "node scripts/build.mjs",
     "prepare": "npm run build",
-    "compare": "python3 compare/run.py"
+    "compare": "python3 compare/run.py",
+    "test:browser": "node test/browser/docs.mjs",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
   },
   "exports": {
     ".": {
@@ -56,7 +60,11 @@
   "sideEffects": false,
   "devDependencies": {
     "@types/node": "^22.20.5",
+    "playwright": "1.64.1",
+    "smaltkit": "github:stenhoor/smaltkit#dec0f7e08d1cb3649126b355c921a7f48b88edd9",
+    "smaltty": "github:stenhoor/smaltty#v0.15.0",
     "typescript": "~6.0.3",
-    "typescript7": "npm:typescript@~7.0.2"
+    "typescript7": "npm:typescript@~7.0.2",
+    "vitepress": "1.6.4"
   }
 }
