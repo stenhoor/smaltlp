@@ -123,6 +123,11 @@ export default defineConfig({
           },
           { text: 'Errors', link: '/reference/errors' },
           { text: 'Where smaltlp differs', link: '/reference/divergences' },
+          {
+            text: 'Internals',
+            collapsed: true,
+            items: [{ text: 'Benchmarks', link: '/research/benchmarks' }],
+          },
         ],
       },
     ],

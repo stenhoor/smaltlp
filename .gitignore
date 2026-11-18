@@ -6,3 +6,4 @@ coverage/
 .claude/worktrees/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
+bench/data/
