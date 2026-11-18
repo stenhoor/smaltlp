@@ -32,6 +32,8 @@ camelCase.
   ±Infinity) for no bound on that side.
 - `maxIter` (default: no limit short of 2³¹): the most changes of basis.
 - `tol` (default `1e-7`): how far outside its bounds a variable, and how far the wrong side of 0 a reduced cost, may be.
+- `presolve` (default `true`): remove empty rows, fixed variables and singleton rows before solving, and restore the
+  solution and duals afterwards, as scipy's `presolve` option does for HiGHS.
 - `integrality`: not supported until `milp()`; giving it fails.
 
 ## Returns
@@ -53,7 +55,7 @@ A `LinprogResult`, scipy's fields:
 - `LP_VALUE`: a NaN or infinite cost, matrix entry or right-hand side; a lower bound of Infinity or an upper bound of
   -Infinity.
 - `LP_PARAM`: a matrix without its right-hand side or the other way round; `tol` not between 0 and 1; `maxIter` not a
-  whole number.
+  whole number; `presolve` not `true` or `false`.
 - `LP_UNSUPPORTED`: `integrality`.
 
 ## Notes

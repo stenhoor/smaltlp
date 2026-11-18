@@ -82,9 +82,9 @@ function randomCase(seed: number, m1: number, m2: number, n: number, density: nu
 }
 
 /** Checks the optimality conditions, scaled to the problem's size. */
-function checkKkt(k: Case, label: string): void {
+function checkKkt(k: Case, label: string, presolve = true): void {
   const n = k.c.length;
-  const res = linprogSync(k.c, { AUb: k.AUb, bUb: k.bUb, AEq: k.AEq, bEq: k.bEq, bounds: k.bounds });
+  const res = linprogSync(k.c, { AUb: k.AUb, bUb: k.bUb, AEq: k.AEq, bEq: k.bEq, bounds: k.bounds, presolve });
   assert.equal(res.status, 0, `${label}: ${res.message}`);
   const x = res.x!;
   const tol = 1e-6;
@@ -151,5 +151,13 @@ test('costs toward infinite bounds, held by rows: artificial bounds at work', ()
     const r = rng(seed * 104729);
     const n = 1 + Math.floor(r() * 10);
     checkKkt(randomCase(5000 + seed, Math.floor(r() * 6), Math.floor(r() * 3), n, 0.6, true), `boxed seed ${seed}`);
+  }
+});
+
+test('random small problems meet the optimality conditions without presolve too', () => {
+  for (let seed = 1; seed <= 100; seed++) {
+    const r = rng(seed * 7919);
+    const n = 1 + Math.floor(r() * 12);
+    checkKkt(randomCase(seed, Math.floor(r() * 10), Math.floor(r() * 4), n, 0.6), `seed ${seed}, no presolve`, false);
   }
 });

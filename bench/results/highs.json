@@ -6,36 +6,36 @@
  "results": {
   "lp-50x75": {
    "HiGHS, defaults": {
-    "milliseconds": 0.6913980000149422,
+    "milliseconds": 0.5713660000026266,
     "iterations": 29,
     "objective": -1504.0799606859773
    },
    "HiGHS, serial dual simplex, no presolve": {
-    "milliseconds": 0.3156280000098377,
+    "milliseconds": 0.22302599998624828,
     "iterations": 28,
     "objective": -1504.0799606859773
    }
   },
   "lp-150x225": {
    "HiGHS, defaults": {
-    "milliseconds": 3.0991959999937535,
+    "milliseconds": 2.5746369999808394,
     "iterations": 73,
     "objective": -4652.14388802732
    },
    "HiGHS, serial dual simplex, no presolve": {
-    "milliseconds": 1.549583999974402,
+    "milliseconds": 1.2692610000044624,
     "iterations": 73,
     "objective": -4652.143888027321
    }
   },
   "lp-300x450": {
    "HiGHS, defaults": {
-    "milliseconds": 7.4018349999960265,
+    "milliseconds": 5.901216000012255,
     "iterations": 77,
     "objective": -10004.17183794888
    },
    "HiGHS, serial dual simplex, no presolve": {
-    "milliseconds": 3.1870379999645593,
+    "milliseconds": 2.5074569999787855,
     "iterations": 77,
     "objective": -10004.17183794888
    }

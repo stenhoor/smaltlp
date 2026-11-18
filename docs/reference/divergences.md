@@ -16,7 +16,8 @@ fails with `LP_UNSUPPORTED`; it never answers differently.
   more than one RHS, RANGES or BOUNDS set.
 - **PuLP:** `add_variable_dict`, `add_variable_dicts` and `add_variable_matrix`; solver choice (smaltlp has its own);
   writing LP and MPS files from a problem.
-- **Presolve:** none yet, so a model is solved as it is written. It comes later.
+- **Presolve:** smaltlp's removes empty rows, fixed variables and singleton rows, and restores the duals afterwards.
+  HiGHS's does much more (doubleton equations, dominated columns, bound tightening, …).
 
 ## Different
 

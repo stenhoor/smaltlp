@@ -21,8 +21,8 @@ class LpProblem {
   numVariables(): number;
   numConstraints(): number;
   isMIP(): boolean;
-  solve(options?: { maxIter?: number; tol?: number }): Promise<LpSolveStats>;
-  solveSync(options?: { maxIter?: number; tol?: number }): LpSolveStats;
+  solve(options?: { maxIter?: number; tol?: number; presolve?: boolean }): Promise<LpSolveStats>;
+  solveSync(options?: { maxIter?: number; tol?: number; presolve?: boolean }): LpSolveStats;
 }
 ```
 
@@ -57,7 +57,8 @@ and `dj`, and each constraint's `pi` and `slack`, are set; otherwise they are `n
 
 ## Notes
 
-`solve()` runs the same dual simplex as [`linprog`](../linprog), in 64-bit floats. A maximization is solved as the
+`solve()` runs the same presolve and dual simplex as [`linprog`](../linprog), in 64-bit floats (`presolve: false` turns
+the presolve off). A maximization is solved as the
 minimization of its negative; `pi` and `dj` are given in the problem's own sense, as PuLP gives them. The compare tests
 check statuses, values, `pi`, `dj` and `slack` against PuLP 4.2.0 with HiGHS. `variables()` lists every variable
 added, used or not, as in PuLP 4.2. A problem with no objective finds any feasible point.

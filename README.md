@@ -8,7 +8,8 @@
 
 **Status: phase 1, first slice, under way** ([smaltworks ADR 0039](https://github.com/stenhoor/smaltworks/blob/main/adr/0039-smaltlp-scope-and-architecture.md)).
 `linprog()` solves linear programs with a bounded dual simplex: dual steepest edge pricing, the bound-flipping
-ratio test and Harris's two passes, over a sparse LU of the basis (Markowitz pivoting). Presolve comes next. Results are checked against scipy's linprog (HiGHS), PuLP and
+ratio test and Harris's two passes, over a sparse LU of the basis (Markowitz pivoting), after a presolve that removes empty rows, fixed variables and
+singleton rows. Results are checked against scipy's linprog (HiGHS), PuLP and
 HiGHS's MPS reader (`npm run compare`, `fixtures/compare.json`).
 
 ```ts
