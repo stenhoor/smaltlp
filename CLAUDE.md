@@ -51,13 +51,17 @@ The site (https://stenhoor.github.io/smaltlp/) mirrors smaltml's (the owner, 202
   kept only where measured, and a GPU result that fails the 64-bit check is never returned as optimal.
 - **Asynchronous API over a synchronous core** (section 3): every solve has a `*Sync` twin; the core touches neither
   the DOM nor Node.
-- **No WebAssembly in this package.** Replaceable kernels go through smaltlp's own versioned contract (section 8); a
-  plugin that serves them follows smaltworks DECISIONS.md, "WebAssembly: plugins only".
+- **Kernels: smaltlp writes them, smaltkit's compute runs them** (ADR 0039 section 8, amended 2026-11-18; smaltworks
+  DECISIONS.md, "WebGPU and SIMD in smaltkit"). SIMD kernels are written with `smaltkit/simd`, GPU kernels in WGSL for
+  `smaltkit/gpu`. They live behind an optional entry point (such as `@smaltworks/smaltlp/kernels`) that the core
+  solver never imports, and smaltkit is an optional peer dependency there. The core stays TypeScript and solves
+  without them; a kernel's results are tested against the TypeScript path, and none ships without a benchmark that
+  shows it gains.
 - **Unsupported fails, never answers differently:** a problem or option smaltlp doesn't support yet fails with an error
   and a code.
 - **Erasable TypeScript only** (`erasableSyntaxOnly`): no enums, namespaces or parameter properties, so Node runs the
   source as it is. Relative imports name the `.ts` file; the build rewrites them to `.js`.
-- **No runtime dependencies.** Dev dependencies: TypeScript (6.0.3 and 7) and `@types/node`; for the site, as smaltml
+- **No runtime dependencies** (smaltkit, for the kernels' entry only, is an optional peer). Dev dependencies: TypeScript (6.0.3 and 7) and `@types/node`; for the site, as smaltml
   has them (the owner, 2026-11-18): vitepress 1.6.4, smaltkit and smaltty (pinned to smaltml's commit and tag) and
   playwright 1.64.1 (CI's version). The compare tests' Python packages are pinned in `compare/requirements.txt`. Ask the
   owner before adding any other package.
