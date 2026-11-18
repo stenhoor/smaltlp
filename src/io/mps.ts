@@ -5,14 +5,13 @@
  * Sections: NAME, OBJSENSE, ROWS, COLUMNS (with integer MARKER lines), RHS, RANGES, BOUNDS and ENDATA. What the
  * reader can't represent fails with LP_UNSUPPORTED, and a line that breaks the format with LP_FORMAT, naming the line.
  *
- * Conventions where the format's documents differ, as this reader applies them:
+ * Where the format's descriptions differ, this reader does what HiGHS's reader does (HiGHS 1.16.0, checked by the
+ * compare tests, fixtures/compare.json):
  * - The first N row is the objective; later N rows are free rows, and are dropped.
  * - An RHS entry on the objective row sets the objective's constant to its negative.
- * - An UP bound below 0 on a variable whose lower bound is still the default 0 makes the lower bound −∞.
- * - Integer columns (between MARKER INTORG and INTEND, or bound LI, UI or BV) keep the default bounds 0 and +∞ unless
- *   bounds are given; BV is 0 to 1.
- * These are assumptions, written from the format's published descriptions; the compare tests check them against
- * HiGHS's reader.
+ * - An UP bound below 0 leaves the lower bound as it is (0 by default), as HiGHS does; some readers make it −∞.
+ * - A column between MARKER INTORG and INTEND with no bound at all is 0 to 1; once any bound is given, the other
+ *   defaults to 0 or +∞ as for any column. BV is 0 to 1.
  * @module
  */
 import { fail } from '../core/errors.ts';
@@ -74,7 +73,8 @@ export function readMps(text: string, options: MpsOptions = {}): MpsModel {
   const range = new Map<number, number>();
   const lo: number[] = [];
   const up: number[] = [];
-  const lowerSet: boolean[] = [];
+  /** Whether any BOUNDS line named the column. */
+  const bounded: boolean[] = [];
   let inInteger = false;
   const setNames: Record<string, string | undefined> = {};
   let section: Section | null = null;
@@ -148,7 +148,7 @@ export function readMps(text: string, options: MpsOptions = {}): MpsModel {
         integer.push(inInteger ? 1 : 0);
         lo.push(0);
         up.push(Infinity);
-        lowerSet.push(false);
+        bounded.push(false);
       } else if (colNames[colNames.length - 1] !== cn) {
         fail('LP_FORMAT', `${where}: column '${cn}' appears again after other columns; a column's entries must be together`);
       }
@@ -212,31 +212,27 @@ export function readMps(text: string, options: MpsOptions = {}): MpsModel {
       const j = colIndex.get(cn);
       if (j === undefined) fail('LP_FORMAT', `${where}: column '${cn}' isn't in COLUMNS`);
       const v = needsValue ? number(f[k + 1]!, where) : 0;
+      bounded[j] = true;
       switch (type) {
         case 'UP':
         case 'UI':
           up[j] = v;
-          if (v < 0 && !lowerSet[j] && lo[j] === 0) lo[j] = -Infinity;
           if (type === 'UI') integer[j] = 1;
           break;
         case 'LO':
         case 'LI':
           lo[j] = v;
-          lowerSet[j] = true;
           if (type === 'LI') integer[j] = 1;
           break;
         case 'FX':
           lo[j] = up[j] = v;
-          lowerSet[j] = true;
           break;
         case 'FR':
           lo[j] = -Infinity;
           up[j] = Infinity;
-          lowerSet[j] = true;
           break;
         case 'MI':
           lo[j] = -Infinity;
-          lowerSet[j] = true;
           break;
         case 'PL':
           up[j] = Infinity;
@@ -244,7 +240,6 @@ export function readMps(text: string, options: MpsOptions = {}): MpsModel {
         case 'BV':
           lo[j] = 0;
           up[j] = 1;
-          lowerSet[j] = true;
           integer[j] = 1;
           break;
       }
@@ -252,6 +247,8 @@ export function readMps(text: string, options: MpsOptions = {}): MpsModel {
     }
   }
   if (!ended) fail('LP_FORMAT', 'the file has no ENDATA line');
+  // Integer columns from the markers with no bound at all are binary, as HiGHS reads them.
+  for (let j = 0; j < colNames.length; j++) if (integer[j] && !bounded[j]) up[j] = 1;
   if (objectiveName === '') fail('LP_FORMAT', 'ROWS has no N row: there is no objective');
 
   const m = rowNames.length;
