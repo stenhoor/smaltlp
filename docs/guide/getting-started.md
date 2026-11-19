@@ -1,5 +1,5 @@
 ---
-description: 'Install smaltlp, choose the entry points you need, and pass it a problem: matrices, a model, or an MPS file.'
+description: 'Install smaltlp, choose the entry points you need, and pass it a problem: matrices, a model, or an MPS or LP file.'
 ---
 
 # Installation
@@ -30,8 +30,8 @@ uses:
   equality rows `AEq·x = bEq`, and bounds. See [Solving from matrices](./matrices).
 - **A model,** with [`LpProblem`](../reference/model/lp-problem): variables and constraints by name, in PuLP 4.2's
   style. See [Building a model](./models).
-- **An MPS file,** with [`readMps`](../reference/io/read-mps): models written by other solvers. See
-  [Reading MPS files](./mps).
+- **An MPS or LP file,** with [`readMps`](../reference/io/read-mps) or [`readLp`](../reference/io/read-lp): models
+  written by other solvers; `writeMps` and `writeLp` write yours. See [MPS and LP files](./mps).
 
 All three solve with the same bounded dual simplex, on the CPU in 64-bit floats. Every solve has an asynchronous call
 and a synchronous twin (`linprog` and `linprogSync`, `solve` and `solveSync`) that give the same answer.

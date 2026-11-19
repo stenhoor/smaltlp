@@ -94,4 +94,4 @@ await prob.solve();
 
 ## See also
 
-[`mpsToProblem`](./mps-to-problem), [Reading MPS files](../../guide/mps)
+[`mpsToProblem`](./mps-to-problem), [`writeMps`](./write-mps), [`readLp`](./read-lp), [MPS and LP files](../../guide/mps)

@@ -93,7 +93,7 @@ export default defineConfig({
           { text: 'Building a model', link: '/guide/models' },
           { text: 'Integer programs', link: '/guide/integers' },
           { text: 'Reading duals', link: '/guide/duals' },
-          { text: 'Reading MPS files', link: '/guide/mps' },
+          { text: 'MPS and LP files', link: '/guide/mps' },
         ],
       },
       {
@@ -120,7 +120,11 @@ export default defineConfig({
             collapsed: false,
             items: [
               { text: 'readMps', link: '/reference/io/read-mps' },
+              { text: 'readLp', link: '/reference/io/read-lp' },
+              { text: 'writeMps', link: '/reference/io/write-mps' },
+              { text: 'writeLp', link: '/reference/io/write-lp' },
               { text: 'mpsToProblem', link: '/reference/io/mps-to-problem' },
+              { text: 'problemToModel', link: '/reference/io/problem-to-model' },
             ],
           },
           { text: 'Errors', link: '/reference/errors' },

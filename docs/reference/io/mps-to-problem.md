@@ -1,5 +1,5 @@
 ---
-description: 'mpsToProblem: an LpProblem from what readMps read, a variable per column and a constraint per row.'
+description: 'mpsToProblem: an LpProblem from what readMps or readLp read, a variable per column and a constraint per row.'
 ---
 
 # mpsToProblem
@@ -9,7 +9,7 @@ description: 'mpsToProblem: an LpProblem from what readMps read, a variable per 
 function mpsToProblem(model: MpsModel): LpProblem;
 ```
 
-An [`LpProblem`](../model/lp-problem) from a model [`readMps`](./read-mps) read: a variable per column and a
+An [`LpProblem`](../model/lp-problem) from a model [`readMps`](./read-mps) or [`readLp`](./read-lp) read: a variable per column and a
 constraint per row, each by its name.
 
 ## Parameters

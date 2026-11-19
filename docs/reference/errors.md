@@ -18,7 +18,7 @@ class SmaltlpError extends Error {
 | --- | --- | --- |
 | `LP_PARAM` | An option is missing, has the wrong type, or has a value smaltlp doesn't accept. | The function's reference page lists its parameters. |
 | `LP_SHAPE` | A matrix or vector has the wrong number of rows or columns for the others. | Check the lengths: `c`, each matrix's rows and columns, each right-hand side. |
-| `LP_VALUE` | A number is NaN, or infinite where it must be finite. | Use finite numbers; `null` means no bound. |
+| `LP_VALUE` | A number is NaN, or infinite where it must be finite; or a name or number a file format can't hold, when writing. | Use finite numbers; `null` means no bound. Rename, or write the other format. |
 | `LP_UNSUPPORTED` | A feature smaltlp doesn't have yet. It fails rather than answering differently. | See [Where smaltlp differs](./divergences). |
 | `LP_FORMAT` | A model file that doesn't follow its format. The message names the line. | Fix the line, or check the file's format option. |
 

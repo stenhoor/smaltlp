@@ -35,6 +35,9 @@ From `@smaltworks/smaltlp/model`, in PuLP 4.2's style:
 From `@smaltworks/smaltlp/io`:
 
 - [`readMps`](./io/read-mps): reads an MPS file, free or fixed.
+- [`readLp`](./io/read-lp): reads a CPLEX LP file.
+- [`writeMps`](./io/write-mps), [`writeLp`](./io/write-lp): a model as MPS or LP text.
+- [`problemToModel`](./io/problem-to-model): an `LpProblem` as a model to write.
 - [`mpsToProblem`](./io/mps-to-problem): an `LpProblem` from what `readMps` read.
 
 ## Errors and differences

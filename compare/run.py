@@ -9,6 +9,7 @@ Every case is our own: hand-written, or generated here from a fixed seed. No out
 import json
 import os
 import random
+import subprocess
 import tempfile
 
 import highspy
@@ -372,6 +373,148 @@ ENDATA
 }
 
 
+LP_FILES = {
+    'syntax': r"""\\ A comment, and keywords in any case
+MAXIMIZE
+ profit: 3 x + 2 y - z + 4
+SUBJECT TO
+ c1: x + y <= 4
+ c2: x + 3 y
+     >= 2
+ c3: 2 x + z = 5
+ -x + 2 z >= -1
+ c5: 3 x + 2 x - y >= 1.5e-1
+BOUNDS
+ x <= 10
+ y <= -1
+ -5 <= z <= 8
+ w free
+ v >= -inf
+ u = 2
+ 3 <= t
+ t <= 7
+GENERAL
+ g
+BINARY
+ b
+END
+""",
+    'short keywords': r"""min
+ obj: 2 x1 + 3.5e1 x2 - .5 x3
+s.t.
+ r_1: x1 + x2 + x3 >= 1
+ r_2: x1 - x2 = 0
+ r.3: x3 <= +2
+bounds
+ x3 >= -1
+gen
+ x1
+bin
+ x2
+end
+""",
+    'plan': r"""Maximize
+ obj: 3 tables + 5 chairs
+Subject To
+ plant1: tables <= 4
+ plant2: 2 chairs <= 12
+ plant3: 3 tables + 2 chairs <= 18
+End
+""",
+    'integer plan': r"""Minimize
+ cost: 300 small + 520 large + 45 overtime
+Subject To
+ tonnes: 7 small + 13 large + 1.5 overtime >= 61
+ drivers: small + large <= 6
+Bounds
+ overtime <= 8
+Generals
+ small
+ large
+End
+""",
+    'no objective terms': r"""Maximize
+ obj:
+Subject To
+ c1: a + b <= 3
+End
+""",
+}
+
+# LP files HiGHS refuses: smaltlp must fail on them too (with LP_FORMAT).
+LP_REJECTED = {
+    'range row': 'Minimize\n obj: x\nSubject To\n r1: -2 <= x - y <= 3\nEnd\n',
+    'variable on the right': 'Minimize\n obj: x\nSubject To\n c1: x >= y\nEnd\n',
+}
+
+# An LP file HiGHS reads with a warning, ignoring the constant; smaltlp fails instead (docs: "Where smaltlp differs").
+LP_DIVERGENT = {
+    'constant on the left': 'Minimize\n obj: x\nSubject To\n c1: 2 x + 4 <= 10\nEnd\n',
+}
+
+
+def highs_reading(path):
+    """The model HiGHS reads from a file, by name, or None where it refuses the file."""
+    h = highspy.Highs()
+    h.setOptionValue('output_flag', False)
+    if h.readModel(path) == highspy.HighsStatus.kError:
+        return None
+    lp = h.getLp()
+    a = lp.a_matrix_
+    entries = []
+    for j in range(lp.num_col_):
+        for k in range(a.start_[j], a.start_[j + 1]):
+            entries.append([int(a.index_[k]), j, num(a.value_[k])])
+    out = {
+        'sense': 'maximize' if lp.sense_ == highspy.ObjSense.kMaximize else 'minimize',
+        'offset': num(lp.offset_),
+        'colNames': list(lp.col_names_),
+        'rowNames': list(lp.row_names_),
+        'c': nums(lp.col_cost_),
+        'colLo': nums(lp.col_lower_),
+        'colUp': nums(lp.col_upper_),
+        'rowLo': nums(lp.row_lower_),
+        'rowUp': nums(lp.row_upper_),
+        'integer': [int(v) for v in lp.integrality_] if len(lp.integrality_) else [0] * lp.num_col_,
+        'entries': entries,
+    }
+    h.setOptionValue('mip_rel_gap', 0)
+    h.run()
+    if h.getModelStatus() == highspy.HighsModelStatus.kOptimal:
+        out['objective'] = num(h.getInfo().objective_function_value)
+    return out
+
+
+def lp_case(name, text):
+    path = os.path.join(tempfile.mkdtemp(), 'model.lp')
+    with open(path, 'w') as f:
+        f.write(text)
+    return {'name': name, 'text': text, 'highs': highs_reading(path)}
+
+
+def written_cases(files):
+    """Every MPS and LP case written by smaltlp's writers (compare/write.ts), then read back by HiGHS."""
+    tmp = tempfile.mkdtemp()
+    src = os.path.join(tmp, 'cases.json')
+    with open(src, 'w') as f:
+        json.dump(files, f)
+    texts = json.loads(subprocess.run(['node', os.path.join(ROOT, 'compare', 'write.ts'), src], check=True, capture_output=True, text=True, cwd=ROOT).stdout)
+    out = []
+    for key, written in sorted(texts.items()):
+        case = {'case': key}
+        for kind, ext in (('lp', 'lp'), ('mps', 'mps'), ('mpsFixed', 'mps')):
+            text = written[kind]
+            case[kind] = None
+            if text is None:
+                continue
+            path = os.path.join(tmp, f'{kind}.{ext}')
+            with open(path, 'w') as f:
+                f.write(text)
+            case[kind] = {'text': text, 'highs': highs_reading(path)}
+        out.append(case)
+    return out
+
+
 def mps_case(name, text):
     path = os.path.join(tempfile.mkdtemp(), name + '.mps')
     with open(path, 'w') as f:
@@ -405,6 +548,11 @@ def main():
         'milp': milp_cases(),
         'model': model_cases(),
         'mps': [mps_case(n, t) for n, t in MPS_FILES.items()],
+        'lp': [lp_case(n, t) for n, t in LP_FILES.items()],
+        'lpRejected': [lp_case(n, t) for n, t in LP_REJECTED.items()],
+        'lpDivergent': [lp_case(n, t) for n, t in LP_DIVERGENT.items()],
+        'written': written_cases([{'name': n, 'kind': 'mps', 'text': t} for n, t in MPS_FILES.items()]
+                                 + [{'name': n, 'kind': 'lp', 'text': t} for n, t in LP_FILES.items()]),
     }
     path = os.path.join(ROOT, 'fixtures', 'compare.json')
     with open(path, 'w') as f:
