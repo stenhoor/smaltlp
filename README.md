@@ -10,7 +10,7 @@
 `linprog()` solves linear programs with a bounded dual simplex: dual steepest edge pricing, the bound-flipping
 ratio test and Harris's two passes, over a sparse LU of the basis (Markowitz pivoting), after a presolve that removes empty rows, fixed variables and
 singleton rows. Results are checked against scipy's linprog (HiGHS), PuLP and
-HiGHS's MPS reader (`npm run compare`, `fixtures/compare.json`).
+HiGHS's MPS and LP readers (`npm run compare`, `fixtures/compare.json`).
 
 ```ts
 import { linprog } from '@smaltworks/smaltlp';
@@ -41,7 +41,7 @@ const stats = await prob.solve(); // stats.statusStr: 'Optimal'
 plant3.pi; // 1: the objective's gain per unit more of plant 3
 ```
 
-Or read a model from an MPS file, free or fixed:
+Or read a model from an MPS file, free or fixed (`readLp` reads LP files, and `writeMps` and `writeLp` write either):
 
 ```ts
 import { readMps, mpsToProblem } from '@smaltworks/smaltlp/io';

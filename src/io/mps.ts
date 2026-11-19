@@ -311,3 +311,100 @@ function fields(raw: string, format: 'free' | 'fixed', cols: readonly (readonly 
   while (out.length && out[out.length - 1] === '') out.pop();
   return out;
 }
+
+/**
+ * A model as MPS text, free (the default) or fixed, which {@link readMps} and HiGHS read back to the same model (the
+ * compare tests check HiGHS's reading).
+ * - A row with only an upper side is L, only a lower side G, both equal E, both finite and different L with a RANGES
+ *   entry; a row with neither side is a free N row, which readers (this one and HiGHS's) drop.
+ * - The objective's constant is the objective row's RHS entry, negated, as the reader takes it.
+ * - Integer columns sit between MARKER lines; an integer column from 0 to 1 is BV, and one from 0 with no upper bound
+ *   gets an explicit LO 0, since an integer column with no bounds reads as 0 to 1.
+ * - Free format: names may not hold spaces. Fixed: names are at most 8 characters and numbers at most 12; one that
+ *   doesn't fit fails with LP_VALUE rather than being cut.
+ */
+export function writeMps(model: MpsModel, options: MpsOptions = {}): string {
+  const format = options.format ?? 'free';
+  if (format !== 'free' && format !== 'fixed') fail('LP_PARAM', `format is 'free' or 'fixed', not ${String(format)}`);
+  const fixed = format === 'fixed';
+  const name = (s: string, what: string): string => {
+    if (s === '' || /\s/.test(s) && !fixed) fail('LP_VALUE', `the ${what} name '${s}' can't be written in free MPS: it is empty or holds a space`);
+    if (fixed && (s.length > 8 || s.trim() !== s)) fail('LP_VALUE', `the ${what} name '${s}' can't be written in fixed MPS: names are at most 8 characters`);
+    return s;
+  };
+  const value = (v: number): string => {
+    const t = String(v + 0);
+    if (fixed && t.length > 12) fail('LP_VALUE', `the number ${t} doesn't fit fixed MPS's 12 characters; write free MPS instead`);
+    return t;
+  };
+  /** A data line: in fixed format, each field at its set columns (2, 5, 15, 25, 40, 50, counting from 1). */
+  const line = (code: string, ...f: string[]): string => {
+    if (!fixed) return ` ${[code, ...f].filter((x) => x !== '').join(' ')}`;
+    const starts = code === '' ? [4, 14, 24, 39, 49] : [1, 4, 14, 24, 39, 49];
+    const parts = code === '' ? f : [code, ...f];
+    let s = '';
+    parts.forEach((x, k) => (s = s.padEnd(starts[k]!) + x));
+    return s.trimEnd();
+  };
+  const objName = name(model.objectiveName || 'obj', 'objective');
+  model.colNames.forEach((s) => name(s, 'column'));
+  model.rowNames.forEach((s) => name(s, 'row'));
+  const out: string[] = [fixed ? `NAME          ${model.name}` : `NAME ${model.name}`.trimEnd()];
+  if (model.sense === 'maximize') out.push('OBJSENSE', '    MAX');
+  out.push('ROWS', line('N', objName));
+  const kind = model.rowNames.map((_, r) => {
+    const l = model.rowLo[r]!;
+    const u = model.rowUp[r]!;
+    return l === -Infinity && u === Infinity ? 'N' : l === u ? 'E' : l === -Infinity ? 'L' : u === Infinity ? 'G' : 'L';
+  });
+  model.rowNames.forEach((r, i) => out.push(line(kind[i]!, r)));
+  out.push('COLUMNS');
+  const byCol: [number, number][][] = model.colNames.map(() => []);
+  const { row, col, value: val } = model.entries;
+  for (let k = 0; k < val.length; k++) if (val[k] !== 0) byCol[col[k]!]!.push([row[k]!, val[k]!]);
+  let inInt = false;
+  let marker = 0;
+  model.colNames.forEach((cn, j) => {
+    const isInt = model.integer[j] === 1;
+    if (isInt !== inInt) {
+      const m = `MARKER${String(marker++).padStart(fixed ? 2 : 1, '0')}`;
+      out.push(fixed ? line('', m, "'MARKER'", '', isInt ? "'INTORG'" : "'INTEND'") : `    ${m} 'MARKER' ${isInt ? "'INTORG'" : "'INTEND'"}`);
+      inInt = isInt;
+    }
+    const pairs: [string, number][] = [];
+    if (model.c[j] !== 0) pairs.push([objName, model.c[j]!]);
+    for (const [r, v] of byCol[j]!) pairs.push([model.rowNames[r]!, v]);
+    // A column with no entries at all still has to be named.
+    if (pairs.length === 0) pairs.push([objName, 0]);
+    for (const [rn, v] of pairs) out.push(line('', cn, rn, value(v)));
+  });
+  if (inInt) out.push(fixed ? line('', `MARKER${String(marker).padStart(2, '0')}`, "'MARKER'", '', "'INTEND'") : `    MARKER${marker} 'MARKER' 'INTEND'`);
+  const rhs: string[] = [];
+  if (model.offset !== 0) rhs.push(line('', 'RHS', objName, value(-model.offset)));
+  const ranges: string[] = [];
+  model.rowNames.forEach((rn, r) => {
+    const l = model.rowLo[r]!;
+    const u = model.rowUp[r]!;
+    const b = kind[r] === 'G' ? l : kind[r] === 'N' ? 0 : u;
+    if (b !== 0) rhs.push(line('', 'RHS', rn, value(b)));
+    if (kind[r] === 'L' && l !== -Infinity) ranges.push(line('', 'RNG', rn, value(u - l)));
+  });
+  if (rhs.length) out.push('RHS', ...rhs);
+  if (ranges.length) out.push('RANGES', ...ranges);
+  const bounds: string[] = [];
+  model.colNames.forEach((cn, j) => {
+    const l = model.colLo[j]!;
+    const u = model.colUp[j]!;
+    const isInt = model.integer[j] === 1;
+    const b = (type: string, v?: number) => bounds.push(line(type, 'BND', cn, v === undefined ? '' : value(v)));
+    if (isInt && l === 0 && u === 1) return b('BV');
+    if (l === u) return b('FX', l);
+    if (l === -Infinity && u === Infinity) return b('FR');
+    if (l === -Infinity) b('MI');
+    else if (l !== 0 || isInt || u < 0) b('LO', l);
+    if (u !== Infinity) b('UP', u);
+  });
+  if (bounds.length) out.push('BOUNDS', ...bounds);
+  out.push('ENDATA', '');
+  return out.join('\n');
+}

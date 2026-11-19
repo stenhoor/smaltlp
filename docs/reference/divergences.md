@@ -15,10 +15,10 @@ fails with `LP_UNSUPPORTED`; it never answers differently.
 - **Branch-and-bound:** no cutting planes, primal heuristics or MIP presolve (presolve simplifies the root's linear
   program only), so smaltlp takes far longer than HiGHS on larger integer programs.
 - **`linprog` options:** `method`, `callback`, `x0` and scipy's other `options`: only `maxIter` and `tol`.
-- **Model files:** writing MPS, and the CPLEX LP format, in either direction. MPS SC bounds, quadratic sections and
-  more than one RHS, RANGES or BOUNDS set.
-- **PuLP:** `add_variable_dict`, `add_variable_dicts` and `add_variable_matrix`; solver choice (smaltlp has its own);
-  writing LP and MPS files from a problem.
+- **Model files:** MPS SC bounds, quadratic sections and more than one RHS, RANGES or BOUNDS set; in LP files,
+  quadratic terms, indicator constraints, and the Semi-Continuous and SOS sections.
+- **PuLP:** `add_variable_dict`, `add_variable_dicts` and `add_variable_matrix`; solver choice (smaltlp has its own).
+  Files are written with `writeLp(problemToModel(prob))`, not `prob.writeLP()`.
 - **Presolve:** smaltlp's removes empty rows, fixed variables and singleton rows, and restores the duals afterwards.
   HiGHS's does much more (doubleton equations, dominated columns, bound tightening, …).
 
@@ -39,3 +39,5 @@ fails with `LP_UNSUPPORTED`; it never answers differently.
   model, as scipy and PuLP report it through HiGHS. smaltlp doesn't search for a solution to tell the two apart.
 - **The gap** is `(fun − bound) / |fun|`, HiGHS's relative gap, with an absolute gap of 1e-6 as well, HiGHS's default.
   Within the gap, smaltlp and HiGHS may stop at different solutions; the compare tests solve to a gap of 0.
+- **A constant on an LP constraint's left side** (`2 x + 4 <= 10`) fails with `LP_FORMAT`; HiGHS ignores the constant,
+  with a warning, and reads `2 x <= 10`.

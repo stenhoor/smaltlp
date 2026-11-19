@@ -1,17 +1,19 @@
 /**
- * Model files: reading MPS (smaltworks ADR 0039, section 5). Writing MPS, and the CPLEX LP format, come later.
+ * Model files (smaltworks ADR 0039, section 5): MPS (free and fixed) and CPLEX LP, read and written, and the step
+ * between a read model and an {@link LpProblem} each way.
  * @module
  */
 import { LpAffineExpression, LpConstraint, LpConstraintEQ, LpConstraintGE, LpConstraintLE, LpMaximize, LpMinimize, LpProblem, type LpVariable } from '../model/index.ts';
 import type { MpsModel } from './mps.ts';
 
-export { readMps, type MpsModel, type MpsOptions } from './mps.ts';
+export { readMps, writeMps, type MpsModel, type MpsOptions } from './mps.ts';
+export { readLp, writeLp, type WriteOptions } from './lp.ts';
 
 /**
- * An {@link LpProblem} from a read MPS model, with a variable per column and a constraint per row, each by its name.
+ * An {@link LpProblem} from a read model (MPS or LP), with a variable per column and a constraint per row, each by its name.
  * A row with both bounds finite and different (a ranged row) becomes two constraints: `name` for its lower side, ≥,
  * and `name_range` for its upper side, ≤; an E row stays one = constraint. Integer columns become 'Integer'
- * variables, which solve once milp() comes (phase 2). Spaces in names (possible in fixed MPS) become underscores, as
+ * variables. Spaces in names (possible in fixed MPS) become underscores, as
  * PuLP makes them.
  */
 export function mpsToProblem(model: MpsModel): LpProblem {
@@ -52,4 +54,54 @@ export function mpsToProblem(model: MpsModel): LpProblem {
     }
   });
   return prob;
+}
+
+/**
+ * A model to write, from an {@link LpProblem}: a column per variable and a row per constraint, in the problem's
+ * order and by their names, its sense, and the objective's constant. 'Binary' variables are integer from 0 to 1.
+ */
+export function problemToModel(prob: LpProblem): MpsModel {
+  const vars = prob.variables();
+  const cons = prob.constraints();
+  const index = new Map(vars.map((v, j) => [v, j]));
+  const c = new Float64Array(vars.length);
+  let offset = 0;
+  if (prob.objective) {
+    for (const [v, a] of prob.objective.terms) {
+      const j = index.get(v);
+      if (j === undefined) continue;
+      c[j]! += a;
+    }
+    offset = prob.objective.constant;
+  }
+  const ei: number[] = [];
+  const ej: number[] = [];
+  const ev: number[] = [];
+  const rowLo = new Float64Array(cons.length);
+  const rowUp = new Float64Array(cons.length);
+  cons.forEach((con, r) => {
+    for (const [v, a] of con.expression.terms) {
+      if (a === 0) continue;
+      ei.push(r);
+      ej.push(index.get(v)!);
+      ev.push(a);
+    }
+    rowLo[r] = con.sense === LpConstraintLE ? -Infinity : con.rhs;
+    rowUp[r] = con.sense === LpConstraintGE ? Infinity : con.rhs;
+  });
+  return {
+    name: prob.name,
+    sense: prob.sense === LpMaximize ? 'maximize' : 'minimize',
+    objectiveName: 'obj',
+    offset,
+    rowNames: cons.map((con) => con.name ?? ''),
+    rowLo,
+    rowUp,
+    colNames: vars.map((v) => v.name),
+    c,
+    colLo: Float64Array.from(vars, (v) => v.lowBound ?? -Infinity),
+    colUp: Float64Array.from(vars, (v) => v.upBound ?? Infinity),
+    integer: Uint8Array.from(vars, (v) => (v.cat === 'Continuous' ? 0 : 1)),
+    entries: { row: Int32Array.from(ei), col: Int32Array.from(ej), value: Float64Array.from(ev) },
+  };
 }

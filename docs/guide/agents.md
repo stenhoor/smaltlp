@@ -37,8 +37,9 @@ prob.add(x.le(4), 'cap');
 const stats = await prob.solve();
 if (stats.status === LpSolveStatus.Optimal) use(x.varValue, prob.getConstraintByName('cap')!.pi);
 
-// From an MPS file's text.
-const fromFile = mpsToProblem(readMps(text));
+// From an MPS or LP file's text, and back.
+const fromFile = mpsToProblem(readMps(text)); // or readLp(text)
+const lpText = writeLp(problemToModel(prob)); // or writeMps(…, { format: 'free' | 'fixed' })
 ```
 
 ## Rules
