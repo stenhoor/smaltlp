@@ -94,6 +94,7 @@ export default defineConfig({
           { text: 'Integer programs', link: '/guide/integers' },
           { text: 'Reading duals', link: '/guide/duals' },
           { text: 'MPS and LP files', link: '/guide/mps' },
+          { text: 'Models from tables', link: '/guide/tables' },
         ],
       },
       {
@@ -125,6 +126,16 @@ export default defineConfig({
               { text: 'writeLp', link: '/reference/io/write-lp' },
               { text: 'mpsToProblem', link: '/reference/io/mps-to-problem' },
               { text: 'problemToModel', link: '/reference/io/problem-to-model' },
+            ],
+          },
+          {
+            text: 'Tables',
+            collapsed: false,
+            items: [
+              { text: 'addVariables', link: '/reference/tables/add-variables' },
+              { text: 'dotColumn', link: '/reference/tables/dot-column' },
+              { text: 'addConstraints', link: '/reference/tables/add-constraints' },
+              { text: 'variableRows, constraintRows, withColumn', link: '/reference/tables/results' },
             ],
           },
           {

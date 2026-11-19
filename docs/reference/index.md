@@ -40,6 +40,15 @@ From `@smaltworks/smaltlp/io`:
 - [`problemToModel`](./io/problem-to-model): an `LpProblem` as a model to write.
 - [`mpsToProblem`](./io/mps-to-problem): an `LpProblem` from what `readMps` read.
 
+## Tables
+
+From `@smaltworks/smaltlp/tables`: models from query results and frames.
+
+- [`addVariables`](./tables/add-variables): a variable for each row of a table.
+- [`dotColumn`](./tables/dot-column): a numeric column dotted with those variables.
+- [`addConstraints`](./tables/add-constraints): constraints from a table of limits and a table of terms.
+- [`variableRows`, `constraintRows`, `withColumn`](./tables/results): the answers as rows.
+
 ## Worker
 
 From `@smaltworks/smaltlp/worker`:

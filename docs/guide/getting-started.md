@@ -24,6 +24,7 @@ uses:
 | `@smaltworks/smaltlp/mip` | `milp`, `milpSync` |
 | `@smaltworks/smaltlp/model` | `LpProblem`, `LpVariable`, `LpAffineExpression`, `LpConstraint`, `lpSum`, `lpDot`, `value`, `LpSolveStatus`, `LpMinimize`, `LpMaximize`, `LpConstraintLE`, `LpConstraintEQ`, `LpConstraintGE` |
 | `@smaltworks/smaltlp/io` | `readMps`, `readLp`, `writeMps`, `writeLp`, `mpsToProblem`, `problemToModel` |
+| `@smaltworks/smaltlp/tables` | `addVariables`, `dotColumn`, `addConstraints`, `variableRows`, `constraintRows`, `withColumn` |
 | `@smaltworks/smaltlp/worker` | `startWorker`, `connect`, `serve`: solves in a Web Worker |
 
 ## Three ways in

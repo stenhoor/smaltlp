@@ -113,7 +113,7 @@ function sources(dir: string): [string, string][] {
     return statSync(p).isDirectory() ? sources(p) : p.endsWith('.ts') ? [[`/src/${p.slice(SRC.length)}`, readFileSync(p, 'utf8')] as [string, string]] : [];
   });
 }
-const AREAS = ['lp', 'mip', 'model', 'io', 'worker'];
+const AREAS = ['lp', 'mip', 'model', 'io', 'tables', 'worker'];
 const checkTypes = typeChecker({
   files: Object.fromEntries(sources(SRC)),
   packages: { '@smaltworks/smaltlp': '/src/index.ts', ...Object.fromEntries(AREAS.map((a) => [`@smaltworks/smaltlp/${a}`, `/src/${a}/index.ts`])) },
