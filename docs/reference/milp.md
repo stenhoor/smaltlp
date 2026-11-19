@@ -73,7 +73,7 @@ A `MilpResult`, scipy's fields in camelCase:
 Solved by branch-and-bound over the [`linprog`](./linprog) dual simplex. The search goes depth first until it finds a
 first integer solution, then takes the open node with the lowest bound. It branches on the integer variable whose
 value is furthest from a whole number. A value within 1e-6 of a whole number counts as whole, as in HiGHS. Each node below
-the root starts the dual simplex from its parent's optimal basis (a warm start), which takes fewer than half the
+the root starts the dual simplex from its parent's optimal basis and a copy of its factorization (a warm start), which takes fewer than half the
 iterations of solving it from the start ([benchmarks](../research/benchmarks#branch-and-bound-warm-starts)). There are
 no cutting planes or heuristics yet, so smaltlp solves fewer problems than HiGHS in the same time.
 

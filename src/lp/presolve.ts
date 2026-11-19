@@ -49,7 +49,7 @@ function presolveAndSolve(lp: Lp, opts: SimplexOptions): SimplexResult {
   const removed: { i: number; j: number; a: number; lo: number; up: number }[] = [];
   const fixedValue = new Float64Array(n);
 
-  const infeasible = (): SimplexResult => ({ status: 2, nit: 0, x: new Float64Array(n + m), d: new Float64Array(n + m), at: new Int8Array(n + m), basis: null });
+  const infeasible = (): SimplexResult => ({ status: 2, nit: 0, x: new Float64Array(n + m), d: new Float64Array(n + m), at: new Int8Array(n + m), basis: null, factor: null });
 
   for (let changed = true; changed; ) {
     changed = false;
@@ -118,7 +118,7 @@ function presolveAndSolve(lp: Lp, opts: SimplexOptions): SimplexResult {
     rowUp: Float64Array.from(keepRows, (i) => rowUp[i]!),
   };
   const res = dualSimplex(reduced, opts);
-  if (res.status !== 0) return { ...res, x: new Float64Array(n + m), d: new Float64Array(n + m), at: new Int8Array(n + m), basis: null };
+  if (res.status !== 0) return { ...res, x: new Float64Array(n + m), d: new Float64Array(n + m), at: new Int8Array(n + m), basis: null, factor: null };
 
   // Postsolve: the columns' values, then every row's dual, then every column's reduced cost from the original problem.
   const nr = keepCols.length;
@@ -173,6 +173,7 @@ function presolveAndSolve(lp: Lp, opts: SimplexOptions): SimplexResult {
     else if (atLo) at[j] = -1;
     else if (atUp) at[j] = 1;
   }
-  return { status: 0, nit: res.nit, x, d, at, basis };
+  // The reduced problem's factorization isn't the original's: a later solve factors the basis itself.
+  return { status: 0, nit: res.nit, x, d, at, basis, factor: null };
 }
 

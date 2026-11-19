@@ -50,6 +50,17 @@ export interface SimplexOptions {
    * solve starts from the logicals instead. Its dual steepest edge weights start at 1.
    */
   basis?: ArrayLike<number>;
+  /**
+   * The factorization of `basis`'s matrix, in `basis`'s order, such as an earlier result's `factor`: the solve starts
+   * from a copy of it instead of factoring again. Ignored without a valid `basis`.
+   */
+  factor?: BasisFactor;
+  /**
+   * At the optimum, factor the basis afresh before computing the returned values (default true), so they carry no
+   * rounding from the changes of basis. False recomputes them from the current factorization and its changes, which
+   * branch-and-bound's nodes use: the next refactorization comes within 64 changes of basis all the same.
+   */
+  refactorAtEnd?: boolean;
 }
 
 export interface SimplexResult {
@@ -64,6 +75,8 @@ export interface SimplexResult {
   at: Int8Array;
   /** The optimal basis's m basic variables (structurals then logicals), to start a later solve from; null unless status is 0. */
   basis: Int32Array | null;
+  /** The factorization of `basis`'s matrix (fresh unless `refactorAtEnd` was false), to start a later solve from; null unless status is 0. */
+  factor: BasisFactor | null;
 }
 
 const BASIC = 0;
@@ -79,6 +92,30 @@ const BOX_START = 1e6;
 const BOX_LIMIT = 1e14;
 /** Changes of basis between refactorizations. */
 const REFACTOR = 64;
+
+/** A matrix by rows (CSR), made once per matrix: branch-and-bound solves the same matrix at every node. */
+const ROWS = new WeakMap<Csc, { start: Int32Array; col: Int32Array; value: Float64Array }>();
+function rowsOf(A: Csc): { start: Int32Array; col: Int32Array; value: Float64Array } {
+  const known = ROWS.get(A);
+  if (known) return known;
+  const m = A.rows;
+  const start = new Int32Array(m + 1);
+  for (let p = 0; p < A.index.length; p++) start[A.index[p]! + 1]!++;
+  for (let i = 0; i < m; i++) start[i + 1]! += start[i]!;
+  const col = new Int32Array(A.index.length);
+  const value = new Float64Array(A.index.length);
+  const fill = start.slice(0, m);
+  for (let j = 0; j < A.cols; j++) {
+    for (let p = A.start[j]!; p < A.start[j + 1]!; p++) {
+      const q = fill[A.index[p]!]!++;
+      col[q] = j;
+      value[q] = A.value[p]!;
+    }
+  }
+  const rows = { start, col, value };
+  ROWS.set(A, rows);
+  return rows;
+}
 
 export function dualSimplex(lp: Lp, opts: SimplexOptions): SimplexResult {
   return new DualSimplex(lp, opts).run();
@@ -104,7 +141,19 @@ class DualSimplex {
   private readonly weight: Float64Array;
   private readonly factor: BasisFactor;
   private readonly opts: SimplexOptions;
+  /** A by rows (CSR), for the pivot row: row i's entries are rowCol/rowVal[rowStart[i] … rowStart[i+1]). */
+  private readonly rowStart: Int32Array;
+  private readonly rowCol: Int32Array;
+  private readonly rowVal: Float64Array;
+  /** The ratio test's candidates, reused each iteration: column, |α̂|, ratio, Harris's ratio, and whether flipped. */
+  private readonly candJ: Int32Array;
+  private readonly candA: Float64Array;
+  private readonly candR: Float64Array;
+  private readonly candH: Float64Array;
+  private readonly candUsed: Uint8Array;
   private box = BOX_START;
+  /** Whether the factorization came with the warm start. */
+  private readonly given: boolean;
   private nit = 0;
 
   constructor(lp: Lp, opts: SimplexOptions) {
@@ -130,8 +179,15 @@ class DualSimplex {
     this.head = new Int32Array(m);
     // The first basis is −I, whose rows of B⁻¹ have norm 1.
     this.weight = new Float64Array(m).fill(1);
-    this.factor = new BasisFactor(m);
+    this.factor = opts.factor && opts.factor.m === m ? opts.factor.clone() : new BasisFactor(m);
+    this.given = opts.factor !== undefined && opts.factor.m === m;
     for (let i = 0; i < m; i++) this.head[i] = n + i;
+    ({ start: this.rowStart, col: this.rowCol, value: this.rowVal } = rowsOf(lp.A));
+    this.candJ = new Int32Array(N);
+    this.candA = new Float64Array(N);
+    this.candR = new Float64Array(N);
+    this.candH = new Float64Array(N);
+    this.candUsed = new Uint8Array(N);
   }
 
   // -------------------------------------------------------------------------------------------------------------
@@ -271,7 +327,8 @@ class DualSimplex {
     const warm = this.warmStart();
     this.kind.fill(FREE);
     for (let i = 0; i < m; i++) this.kind[this.head[i]!] = BASIC;
-    if (!this.refactor()) {
+    // A warm start's own factorization saves factoring again.
+    if (!(warm && this.given) && !this.refactor()) {
       if (!warm) return this.finish(4);
       // A singular warm start: start from the logicals after all.
       for (let i = 0; i < m; i++) this.head[i] = this.n + i;
@@ -346,15 +403,25 @@ class DualSimplex {
       const target = toLower ? this.lo[p]! : this.up[p]!;
       const s = toLower ? 1 : -1;
 
-      // The pivot row: ρ = B⁻ᵀ e_r, and α_rj = ρᵀ a_j for every nonbasic j.
+      // The pivot row: ρ = B⁻ᵀ e_r, and α_rj = ρᵀ a_j for every nonbasic j, summed by rows over the rows where ρ isn't 0
+      // (a logical's entry is −ρ_i); the basic variables' entries are 0.
       const rho = new Float64Array(m);
       rho[r] = 1;
       this.factor.btran(rho);
-      for (let j = 0; j < N; j++) alphaRow[j] = this.kind[j] === BASIC ? 0 : this.dot(j, rho);
+      alphaRow.fill(0);
+      const { rowStart, rowCol, rowVal, n } = this;
+      for (let i = 0; i < m; i++) {
+        const ri = rho[i]!;
+        if (ri === 0) continue;
+        for (let q = rowStart[i]!; q < rowStart[i + 1]!; q++) alphaRow[rowCol[q]!]! += ri * rowVal[q]!;
+        alphaRow[n + i] = -ri;
+      }
+      for (let i = 0; i < m; i++) alphaRow[this.head[i]!] = 0;
 
       // The ratio test. With α̂_j = s α_rj, d_j becomes d_j + t α̂_j as the dual step t grows; candidate j's breakpoint
       // is where d_j would change sign.
-      const cand: { j: number; a: number; ratio: number; harris: number }[] = [];
+      const { candJ, candA, candR, candH, candUsed } = this;
+      let nc = 0;
       for (let j = 0; j < N; j++) {
         const k = this.kind[j]!;
         if (k === BASIC || k === FIXED) continue;
@@ -365,9 +432,14 @@ class DualSimplex {
         else if (k === FREE && Math.abs(a) > PIVOT_TOL) dj = Math.abs(this.d[j]!);
         else continue;
         const abs = Math.abs(a);
-        cand.push({ j, a: abs, ratio: dj / abs, harris: (dj + dtol) / abs });
+        candJ[nc] = j;
+        candA[nc] = abs;
+        candR[nc] = dj / abs;
+        candH[nc] = (dj + dtol) / abs;
+        candUsed[nc] = 0;
+        nc++;
       }
-      if (cand.length === 0) {
+      if (nc === 0) {
         // A dual ray: infeasible, unless the ray leans on an artificial bound.
         if (this.rayUsesBox(alphaRow, s)) {
           if (!this.growBox()) return 2;
@@ -375,29 +447,47 @@ class DualSimplex {
         }
         return 2;
       }
-      cand.sort((u, v) => u.ratio - v.ratio);
-
       // Bound flipping (Koberstein's long-step test): the dual objective keeps rising past a boxed variable's
       // breakpoint while the slope, the leaving variable's infeasibility less |α̂_j| × (u_j − l_j) for each one passed,
-      // stays positive. The variables passed flip to their other bound instead of entering.
+      // stays positive. The variables passed flip to their other bound instead of entering. Breakpoints are taken in
+      // order of ratio (then column) by selection, so only the few passed are ordered, never the whole list.
       let slope = Math.abs(this.x[p]! - target);
-      let k = 0;
-      for (; k < cand.length - 1; k++) {
-        const j = cand[k]!.j;
+      const flips: number[] = [];
+      // Past a few flips, the rest are sorted once instead (many flips happen where most variables are boxed).
+      let order: Int32Array | null = null;
+      let next = 0;
+      while (flips.length < nc - 1) {
+        let c = -1;
+        if (flips.length < 8) {
+          for (let i = 0; i < nc; i++) if (!candUsed[i] && (c < 0 || candR[i]! < candR[c]!)) c = i;
+        } else {
+          if (!order) {
+            const rest: number[] = [];
+            for (let i = 0; i < nc; i++) if (!candUsed[i]) rest.push(i);
+            order = Int32Array.from(rest.sort((u, v) => candR[u]! - candR[v]! || u - v));
+          }
+          c = order[next++]!;
+        }
+        const j = candJ[c]!;
         if (this.art[j] !== 0 || this.kind[j] === FREE || !(this.lo[j]! > -Infinity && this.up[j]! < Infinity)) break;
-        const drop = cand[k]!.a * (this.up[j]! - this.lo[j]!);
+        const drop = candA[c]! * (this.up[j]! - this.lo[j]!);
         if (slope - drop < 0) break;
         slope -= drop;
+        candUsed[c] = 1;
+        flips.push(j);
       }
 
-      // Harris's two passes over the rest: the largest pivot among the breakpoints within the tolerance of the first.
+      // Harris's two passes over the rest: the largest pivot among the breakpoints within the tolerance of the first;
+      // among equal pivots, the smallest ratio, then the lowest column.
       let bound = Infinity;
-      for (let i = k; i < cand.length; i++) bound = Math.min(bound, cand[i]!.harris);
-      let chosen = k;
-      for (let i = k; i < cand.length && cand[i]!.ratio <= bound; i++) if (cand[i]!.a > cand[chosen]!.a) chosen = i;
-      const q = cand[chosen]!.j;
-      const t = cand[chosen]!.ratio;
-      const flips = cand.slice(0, k).map((c) => c.j);
+      for (let i = 0; i < nc; i++) if (!candUsed[i]) bound = Math.min(bound, candH[i]!);
+      let chosen = -1;
+      for (let i = 0; i < nc; i++) {
+        if (candUsed[i] || candR[i]! > bound) continue;
+        if (chosen < 0 || candA[i]! > candA[chosen]! || (candA[i] === candA[chosen] && candR[i]! < candR[chosen]!)) chosen = i;
+      }
+      const q = candJ[chosen]!;
+      const t = candR[chosen]!;
 
       // The entering column, and a check that it agrees with the pivot row.
       const alphaQ = new Float64Array(m);
@@ -559,9 +649,12 @@ class DualSimplex {
   }
 
   private finish(status: Status): SimplexResult {
+    let fresh = false;
     if (status === 0) {
-      // Fresh values from a fresh factorization, so the result doesn't carry the updates' rounding.
-      if (this.refactor()) {
+      // Fresh values from a fresh factorization, so the result doesn't carry the updates' rounding; or, where the
+      // caller allows it, from the factorization as it stands.
+      if (this.opts.refactorAtEnd === false || this.refactor()) {
+        fresh = true;
         this.computePrimal();
         this.computeDual();
       }
@@ -571,6 +664,6 @@ class DualSimplex {
     for (let j = 0; j < this.N; j++) {
       if (this.kind[j] === FIXED) at[j] = this.d[j]! >= 0 ? -1 : 1;
     }
-    return { status, nit: this.nit, x: this.x, d: this.d, at, basis: status === 0 ? this.head.slice() : null };
+    return { status, nit: this.nit, x: this.x, d: this.d, at, basis: status === 0 ? this.head.slice() : null, factor: fresh ? this.factor : null };
   }
 }

@@ -57,6 +57,28 @@ export class BasisFactor {
     this.work2 = new Float64Array(m);
   }
 
+  /**
+   * A copy that can go on from here without changing this one: L and U are never changed once factored, so they are
+   * shared; the list of changes of basis is copied.
+   */
+  clone(): BasisFactor {
+    const c = new BasisFactor(this.m);
+    c.pivotRow = this.pivotRow;
+    c.pivotCol = this.pivotCol;
+    c.Lstart = this.Lstart;
+    c.Lrow = this.Lrow;
+    c.Lval = this.Lval;
+    c.Upivot = this.Upivot;
+    c.Ustart = this.Ustart;
+    c.Ucol = this.Ucol;
+    c.Uval = this.Uval;
+    c.etaPos = this.etaPos.slice();
+    c.etaPivot = this.etaPivot.slice();
+    c.etaIndex = this.etaIndex.slice();
+    c.etaValue = this.etaValue.slice();
+    return c;
+  }
+
   /** The number of changes of basis since the last factorization. */
   get updates(): number {
     return this.etaPos.length;

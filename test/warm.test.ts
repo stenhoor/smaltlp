@@ -70,6 +70,14 @@ test('after a bound tightens, a warm start reaches the cold optimum', () => {
       const child = { ...lp, colLo, colUp };
       const cold = dualSimplex(child, opts);
       const warm = dualSimplex(child, { ...opts, basis: first.basis! });
+      // From the parent's own factorization too, as branch-and-bound starts its nodes: the same end.
+      const parent = dualSimplex(lp, opts);
+      const reused = dualSimplex(child, { ...opts, basis: parent.basis!, factor: parent.factor!, refactorAtEnd: false });
+      assert.equal(reused.status, cold.status, `${k.name} ${side}: from the parent's factorization`);
+      if (cold.status === 0) {
+        const f0 = objective(child, cold.x);
+        assert.ok(Math.abs(objective(child, reused.x) - f0) <= 1e-7 * (1 + Math.abs(f0)), `${k.name} ${side}: from the parent's factorization`);
+      }
       assert.equal(warm.status, cold.status, `${k.name} ${side}`);
       coldIt += cold.nit;
       warmIt += warm.nit;

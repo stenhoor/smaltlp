@@ -116,3 +116,24 @@ test('an empty basis factors', () => {
   assert.ok(f.factor([]));
   assert.equal(f.ftran(new Float64Array(0)).length, 0);
 });
+
+test('a clone goes on independently: updates to it leave the original as it was', () => {
+  const r = rng(23);
+  const m = 8;
+  const B = sparseMatrix(m, 0.3, 9);
+  const f = new BasisFactor(m);
+  assert.ok(f.factor(columnsOf(B, m)));
+  const g = f.clone();
+  // Change column 3 in the clone only.
+  const q = new Float64Array(m).map(() => r());
+  q[3]! += 4;
+  g.update(3, g.ftran(q.slice()));
+  const B2 = B.slice();
+  for (let i = 0; i < m; i++) B2[i * m + 3] = q[i]!;
+  const a = new Float64Array(m).map(() => r());
+  close(matVec(B, m, f.ftran(a.slice())), a, 1e-9);
+  close(matVec(B2, m, g.ftran(a.slice())), a, 1e-9);
+  close(matTVec(B2, m, g.btran(a.slice())), a, 1e-9);
+  assert.equal(f.updates, 0);
+  assert.equal(g.updates, 1);
+});
