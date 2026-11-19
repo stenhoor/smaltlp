@@ -6,6 +6,8 @@
  */
 import { fail } from '../core/errors.ts';
 import { multiply, shapeOf, stackCsc, type MatrixInput } from '../core/sparse.ts';
+import { branchAndBound } from '../mip/branch.ts';
+import { costOf, integralityOf } from '../mip/milp.ts';
 import { solve } from './presolve.ts';
 import type { Status } from './simplex.ts';
 
@@ -27,8 +29,12 @@ export interface LinprogOptions {
   tol?: number;
   /** Simplify the problem before solving it (empty rows, fixed variables, singleton rows). Default true, as scipy's. */
   presolve?: boolean;
-  /** scipy's integrality: not in this release. `milp()` comes with phase 2 (ADR 0039, section 1). */
-  integrality?: unknown;
+  /**
+   * Each variable's kind, or one for every variable: 0 continuous, 1 integer, as scipy's. With an integer variable,
+   * the problem is solved by branch-and-bound, as `milp()` solves it (default gap, no limits). 2 and 3 fail with
+   * LP_UNSUPPORTED.
+   */
+  integrality?: number | ArrayLike<number>;
 }
 
 /** A constraint group's slack (or residual) and the objective's sensitivity to each right-hand side. */
@@ -63,6 +69,10 @@ export interface LinprogResult {
   lower: Constraints | null;
   /** The upper bounds: `residual` is upper − x; `marginals` the objective's change per unit of each upper bound. */
   upper: Constraints | null;
+  /** With integer variables only, as scipy gives them: nodes solved, the bound on the optimum, and the gap. */
+  mipNodeCount?: number;
+  mipDualBound?: number | null;
+  mipGap?: number | null;
 }
 
 const MESSAGES: Record<Status, string> = {
@@ -83,18 +93,10 @@ export async function linprog(c: ArrayLike<number>, options: LinprogOptions = {}
 
 /** {@link linprog}, synchronously. */
 export function linprogSync(c: ArrayLike<number>, options: LinprogOptions = {}): LinprogResult {
-  if (c === null || typeof c !== 'object' || typeof c.length !== 'number') fail('LP_PARAM', 'c must be an array of numbers');
-  const n = c.length;
-  if (n === 0) fail('LP_SHAPE', 'c is empty: there must be at least one variable');
-  const cost = new Float64Array(n);
-  for (let j = 0; j < n; j++) {
-    const v = c[j]!;
-    if (typeof v !== 'number' || !Number.isFinite(v)) fail('LP_VALUE', `c[${j}] is ${String(v)}; costs must be finite`);
-    cost[j] = v;
-  }
-  if (options.integrality !== undefined) {
-    fail('LP_UNSUPPORTED', 'integrality: integer variables come with milp() in phase 2; linprog solves continuous problems');
-  }
+  const cost = costOf(c);
+  const n = cost.length;
+  const integer = integralityOf(options.integrality, n);
+  const mip = integer.includes(1);
   const tol = options.tol ?? 1e-7;
   if (typeof tol !== 'number' || !(tol > 0) || tol >= 1) fail('LP_PARAM', `tol must be above 0 and below 1, not ${String(tol)}`);
   const maxIter = options.maxIter ?? 2 ** 31 - 1;
@@ -126,43 +128,59 @@ export function linprogSync(c: ArrayLike<number>, options: LinprogOptions = {}):
 
   const presolve = options.presolve ?? true;
   if (typeof presolve !== 'boolean') fail('LP_PARAM', `presolve is true or false, not ${String(presolve)}`);
-  const res = solve({ A, c: cost, colLo, colUp, rowLo, rowUp }, { maxIter, primalTol: tol, dualTol: tol, presolve });
+  const lp = { A, c: cost, colLo, colUp, rowLo, rowUp };
+  if (mip) {
+    // Branch-and-bound, as milp() does it. scipy gives no marginals for an integer problem: they are 0, as scipy's.
+    const b = branchAndBound(lp, { integer, relGap: 1e-4, nodeLimit: Infinity, timeLimit: Infinity, presolve, tol, maxIter });
+    const status: Status = b.end === 'optimal' ? 0 : b.end === 'infeasible' ? 2 : 4;
+    const stats = { mipNodeCount: b.nodes, mipDualBound: Number.isFinite(b.dualBound) ? b.dualBound : null, mipGap: b.x ? b.gap : null };
+    if (status !== 0) {
+      const message = b.end === 'unboundedOrInfeasible' ? 'The problem is unbounded or infeasible.' : MESSAGES[status];
+      return { ...empty(status), message, nit: b.nit, ...stats };
+    }
+    return { ...resultOf(b.x!, null, null), nit: b.nit, ...stats };
+  }
+  const res = solve(lp, { maxIter, primalTol: tol, dualTol: tol, presolve });
   if (res.status !== 0) return { ...empty(res.status), nit: res.nit };
+  return { ...resultOf(res.x.slice(0, n), res.d, res.at), nit: res.nit };
 
-  const x = res.x.slice(0, n);
-  let fun = 0;
-  for (let j = 0; j < n; j++) fun += cost[j]! * x[j]!;
-  const Ax = multiply(A, x);
-  const slack = new Float64Array(mUb);
-  const ineqMarg = new Float64Array(mUb);
-  for (let r = 0; r < mUb; r++) {
-    slack[r] = rowUp[r]! - Ax[r]!;
-    ineqMarg[r] = res.d[n + r]!;
+  /** The result for a solution x, with its reduced costs d and where each variable sits (none for an integer problem). */
+  function resultOf(x: Float64Array, d: Float64Array | null, atBound: Int8Array | null): LinprogResult {
+    let fun = 0;
+    for (let j = 0; j < n; j++) fun += cost[j]! * x[j]!;
+    const Ax = multiply(A, x);
+    const slack = new Float64Array(mUb);
+    const ineqMarg = new Float64Array(mUb);
+    for (let r = 0; r < mUb; r++) {
+      slack[r] = rowUp[r]! - Ax[r]!;
+      if (d) ineqMarg[r] = d[n + r]!;
+    }
+    const con = new Float64Array(mEq);
+    const eqMarg = new Float64Array(mEq);
+    for (let r = 0; r < mEq; r++) {
+      con[r] = rowUp[mUb + r]! - Ax[mUb + r]!;
+      if (d) eqMarg[r] = d[n + mUb + r]!;
+    }
+    const loRes = new Float64Array(n);
+    const upRes = new Float64Array(n);
+    const loMarg = new Float64Array(n);
+    const upMarg = new Float64Array(n);
+    for (let j = 0; j < n; j++) {
+      loRes[j] = x[j]! - colLo[j]!;
+      upRes[j] = colUp[j]! - x[j]!;
+      if (!d || !atBound) continue;
+      if (atBound[j] === -1) loMarg[j] = d[j]!;
+      else if (atBound[j] === 1) upMarg[j] = d[j]!;
+    }
+    return {
+      x, fun, status: 0, message: MESSAGES[0], success: true, nit: 0,
+      slack, con,
+      ineqlin: { residual: slack, marginals: ineqMarg },
+      eqlin: { residual: con, marginals: eqMarg },
+      lower: { residual: loRes, marginals: loMarg },
+      upper: { residual: upRes, marginals: upMarg },
+    };
   }
-  const con = new Float64Array(mEq);
-  const eqMarg = new Float64Array(mEq);
-  for (let r = 0; r < mEq; r++) {
-    con[r] = rowUp[mUb + r]! - Ax[mUb + r]!;
-    eqMarg[r] = res.d[n + mUb + r]!;
-  }
-  const loRes = new Float64Array(n);
-  const upRes = new Float64Array(n);
-  const loMarg = new Float64Array(n);
-  const upMarg = new Float64Array(n);
-  for (let j = 0; j < n; j++) {
-    loRes[j] = x[j]! - colLo[j]!;
-    upRes[j] = colUp[j]! - x[j]!;
-    if (res.at[j] === -1) loMarg[j] = res.d[j]!;
-    else if (res.at[j] === 1) upMarg[j] = res.d[j]!;
-  }
-  return {
-    x, fun, status: 0, message: MESSAGES[0], success: true, nit: res.nit,
-    slack, con,
-    ineqlin: { residual: slack, marginals: ineqMarg },
-    eqlin: { residual: con, marginals: eqMarg },
-    lower: { residual: loRes, marginals: loMarg },
-    upper: { residual: upRes, marginals: upMarg },
-  };
 }
 
 /** A constraint group's matrix and right-hand side, checked against each other and against c. */

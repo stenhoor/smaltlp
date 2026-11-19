@@ -27,6 +27,7 @@ import { fail } from '../core/errors.ts';
 import { fromTriplets } from '../core/sparse.ts';
 import { solve } from '../lp/presolve.ts';
 import type { Status } from '../lp/simplex.ts';
+import { branchAndBound, type BranchEnd } from '../mip/branch.ts';
 
 /** Minimize: PuLP's LpMinimize, 1. */
 export const LpMinimize = 1;
@@ -42,7 +43,9 @@ export type ConstraintSense = typeof LpConstraintLE | typeof LpConstraintEQ | ty
 
 /**
  * How a solve ended: PuLP 4.2's LpSolveStatus codes. smaltlp gives Optimal, Infeasible, Unbounded, IterationLimit
- * (when `maxIter` stops it) and NumericalError; NotSolved before any solve.
+ * (when `maxIter` stops a linear program), TimeLimit and NodeLimit (an integer program's limits), Undefined (an integer
+ * program whose relaxation is unbounded: unbounded or infeasible, as PuLP 4.2 reports it through HiGHS) and
+ * NumericalError; NotSolved before any solve.
  */
 export const LpSolveStatus = {
   NotSolved: 0,
@@ -67,7 +70,7 @@ function statusName(code: SolveStatus): string {
   return Object.entries(LpSolveStatus).find(([, v]) => v === code)![0];
 }
 
-/** A variable's category. Only `'Continuous'` solves until `milp()` (phase 2). */
+/** A variable's category. `'Binary'` is an integer variable in [0, 1]. */
 export type Category = 'Continuous' | 'Integer' | 'Binary';
 
 /** What an expression can be built from: a variable, an expression, or a number. */
@@ -78,7 +81,7 @@ const MAKE = Symbol('LpVariable');
 
 /**
  * A decision variable, made by {@link LpProblem.addVariable} and bound to that problem. After a solve, `varValue`
- * holds its value and `dj` its reduced cost.
+ * holds its value and `dj` its reduced cost (null for an integer program, which has none).
  */
 export class LpVariable {
   readonly name: string;
@@ -187,7 +190,10 @@ export class LpConstraint {
   readonly sense: ConstraintSense;
   /** The name given when it was added to a problem, or `_C1`, `_C2` … */
   name: string | null = null;
-  /** The objective's change per unit of the right-hand side, in the problem's own sense, from the last solve. */
+  /**
+   * The objective's change per unit of the right-hand side, in the problem's own sense, from the last solve. Null for
+   * an integer program, which has no duals.
+   */
   pi: number | null = null;
   /** How far the constraint is from binding: rhs − lhs for ≤, lhs − rhs for ≥, 0 for =. From the last solve. */
   slack: number | null = null;
@@ -240,8 +246,14 @@ export interface SolveOptions {
   maxIter?: number;
   /** Primal and dual feasibility tolerance. Default 1e-7. */
   tol?: number;
-  /** Simplify the problem before solving it. Default true. */
+  /** Simplify the problem before solving it (each node's, for an integer program). Default true. */
   presolve?: boolean;
+  /** An integer program's time limit, in seconds, as PuLP's solvers take it. Default: none. */
+  timeLimit?: number;
+  /** An integer program's relative gap, (objective − bound) / |objective|, at which it stops: PuLP's gapRel. Default 1e-4. */
+  gapRel?: number;
+  /** The most branch-and-bound nodes an integer program solves. Default: no limit. */
+  nodeLimit?: number;
 }
 
 /** What a solve reports: PuLP 4.2's LpSolveStats, the fields smaltlp has, in camelCase. */
@@ -256,6 +268,8 @@ export interface LpSolveStats {
   numVariables: number;
   numConstraints: number;
   isMip: boolean;
+  /** An integer program's lowest bound on the optimum, in the problem's own sense (its highest when maximizing); null for a linear program. */
+  bestBound: number | null;
   /** Seconds the solve took. */
   time: number;
 }
@@ -360,10 +374,7 @@ export class LpProblem {
   /** {@link solve}, synchronously. */
   solveSync(options: SolveOptions = {}): LpSolveStats {
     const start = performance.now();
-    if (this.isMIP()) {
-      const v = this.vars.find((x) => x.cat !== 'Continuous')!;
-      fail('LP_UNSUPPORTED', `${v.name} is ${v.cat}: integer variables come with milp() in phase 2`);
-    }
+    const mip = this.isMIP();
     const tol = options.tol ?? 1e-7;
     if (typeof tol !== 'number' || !(tol > 0) || tol >= 1) fail('LP_PARAM', `tol must be above 0 and below 1, not ${String(tol)}`);
     const maxIter = options.maxIter ?? 2 ** 31 - 1;
@@ -408,16 +419,36 @@ export class LpProblem {
       con.pi = null;
       con.slack = null;
     }
-    const stats = (status: SolveStatus, objective: number | null): LpSolveStats => ({
-      solver: 'smaltlp', status, statusStr: statusName(status), hasSolution: status === LpSolveStatus.Optimal, objective,
-      numVariables: n, numConstraints: m, isMip: false, time: (performance.now() - start) / 1000,
+    const stats = (status: SolveStatus, objective: number | null, bestBound: number | null = null): LpSolveStats => ({
+      solver: 'smaltlp', status, statusStr: statusName(status), hasSolution: objective !== null, objective,
+      numVariables: n, numConstraints: m, isMip: mip, bestBound, time: (performance.now() - start) / 1000,
     });
     if (vars.some((v) => v.lowBound !== null && v.upBound !== null && v.lowBound > v.upBound)) return stats(LpSolveStatus.Infeasible, null);
 
     const A = fromTriplets(m, n, ii, jj, vv);
     const presolve = options.presolve ?? true;
     if (typeof presolve !== 'boolean') fail('LP_PARAM', `presolve is true or false, not ${String(presolve)}`);
-    const res = solve({ A, c, colLo, colUp, rowLo, rowUp }, { maxIter, primalTol: tol, dualTol: tol, presolve });
+    const lp = { A, c, colLo, colUp, rowLo, rowUp };
+    if (mip) {
+      const timeLimit = options.timeLimit ?? Infinity;
+      if (typeof timeLimit !== 'number' || !(timeLimit >= 0)) fail('LP_PARAM', `timeLimit must be a number of seconds, 0 or more, not ${String(timeLimit)}`);
+      const relGap = options.gapRel ?? 1e-4;
+      if (typeof relGap !== 'number' || !(relGap >= 0) || relGap === Infinity) fail('LP_PARAM', `gapRel must be a number, 0 or more, not ${String(relGap)}`);
+      const nodeLimit = options.nodeLimit ?? Infinity;
+      if (nodeLimit !== Infinity && (!Number.isInteger(nodeLimit) || nodeLimit < 0)) fail('LP_PARAM', `nodeLimit must be a whole number, 0 or more, not ${String(nodeLimit)}`);
+      const integer = Uint8Array.from(vars, (v) => (v.cat === 'Continuous' ? 0 : 1));
+      const b = branchAndBound(lp, { integer, relGap, nodeLimit, timeLimit, presolve, tol, maxIter });
+      const bound = Number.isFinite(b.dualBound) ? sign * b.dualBound : null;
+      if (!b.x) return stats(MIP_STATUS[b.end], null, bound);
+      const x = b.x;
+      vars.forEach((v, j) => (v.varValue = x[j]!));
+      cons.forEach((con) => {
+        const activity = value(con.expression)! - con.constant;
+        con.slack = con.sense === LpConstraintLE ? con.rhs - activity : con.sense === LpConstraintGE ? activity - con.rhs : 0;
+      });
+      return stats(MIP_STATUS[b.end], value(this.objective) ?? 0, bound);
+    }
+    const res = solve(lp, { maxIter, primalTol: tol, dualTol: tol, presolve });
     if (res.status !== 0) return stats(STATUS[res.status], null);
     vars.forEach((v, j) => {
       v.varValue = res.x[j]!;
@@ -449,6 +480,16 @@ const STATUS: Record<Status, SolveStatus> = {
   2: LpSolveStatus.Infeasible,
   3: LpSolveStatus.Unbounded,
   4: LpSolveStatus.NumericalError,
+};
+
+/** How branch-and-bound ended, as PuLP 4.2's codes. */
+const MIP_STATUS: Record<BranchEnd, SolveStatus> = {
+  optimal: LpSolveStatus.Optimal,
+  infeasible: LpSolveStatus.Infeasible,
+  unboundedOrInfeasible: LpSolveStatus.Undefined,
+  nodeLimit: LpSolveStatus.NodeLimit,
+  timeLimit: LpSolveStatus.TimeLimit,
+  numerical: LpSolveStatus.NumericalError,
 };
 
 /** A term as an expression. */

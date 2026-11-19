@@ -75,12 +75,13 @@ The site (https://stenhoor.github.io/smaltlp/) mirrors smaltml's (the owner, 202
 - **Layout:** `src/core/` holds what every solver shares (`errors.ts`, `sparse.ts` for CSC matrices, `basis.ts` for
   the basis factorization: a sparse LU with Markowitz pivoting, and product-form updates); `src/lp/` holds linear programs (`simplex.ts`, the dual simplex; `presolve.ts`, presolve and postsolve, which must
   restore the duals as well as the values; `linprog.ts`, scipy's
-  interface); `src/model/` is the modelling layer in PuLP 4.2's style (the owner, 2026-11-18: follow 4.2 only:
+  interface); `src/mip/` holds integer programs (`branch.ts`, branch-and-bound over the LP solve; `milp.ts`, scipy's
+  interface, which `linprog()`'s `integrality` and the model's integer variables use too); `src/model/` is the modelling layer in PuLP 4.2's style (the owner, 2026-11-18: follow 4.2 only:
   `prob.addVariable()`, `constraints()`, `LpSolveStats` and `LpSolveStatus`, in camelCase), solved by the same dual
   simplex; `src/io/` reads model files (`mps.ts`, MPS free and fixed, and
   `mpsToProblem()`). Each area with its own `index.ts` is an entry point in `package.json`
   `exports`.
-- **Compare tests** (ADR 0039, section 6): `compare/run.py` runs every case through scipy's linprog (HiGHS), PuLP
+- **Compare tests** (ADR 0039, section 6): `compare/run.py` runs every case through scipy's linprog and milp (HiGHS), PuLP
   (with HiGHS) and HiGHS's MPS reader, and writes `fixtures/compare.json`; `test/compare.test.ts` checks smaltlp
   against it, without Python. A new feature or option gets cases there: run `npm run compare` (in a virtual
   environment with `compare/requirements.txt`) and commit the fixtures. Cases are our own, hand-written or generated

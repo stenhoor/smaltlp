@@ -31,7 +31,7 @@ expression's constant. PuLP's `LpConstraint`. Build one with `le`, `ge` or `eq` 
 - `name`: the name given when it was added to a problem, or `_C1`, `_C2` …
 - `constant`: the expression's constant, −rhs; `rhs`: the right-hand side.
 - `pi`, after an optimal solve: the objective's change per unit more of the right-hand side, in the problem's own
-  sense.
+  sense. `null` in an integer program, which has no duals.
 - `slack`, after an optimal solve: `rhs − lhs` for `≤`, `lhs − rhs` for `≥`, 0 for `=`.
 
 ## Notes

@@ -28,7 +28,7 @@ for its lower side (≥) and `name_range` for its upper side (≤). An E row sta
 
 ## Notes
 
-Integer columns become `'Integer'` variables, which solve once `milp()` arrives. Spaces in names (possible in fixed
+Integer columns become `'Integer'` variables, and the problem solves as an integer program. Spaces in names (possible in fixed
 MPS) become underscores, as `addVariable` makes them.
 
 ## Examples

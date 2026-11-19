@@ -91,6 +91,7 @@ export default defineConfig({
         items: [
           { text: 'Solving from matrices', link: '/guide/matrices' },
           { text: 'Building a model', link: '/guide/models' },
+          { text: 'Integer programs', link: '/guide/integers' },
           { text: 'Reading duals', link: '/guide/duals' },
           { text: 'Reading MPS files', link: '/guide/mps' },
         ],
@@ -100,6 +101,7 @@ export default defineConfig({
         items: [
           { text: 'Overview', link: '/reference/' },
           { text: 'linprog', link: '/reference/linprog' },
+          { text: 'milp', link: '/reference/milp' },
           {
             text: 'Modelling',
             collapsed: false,

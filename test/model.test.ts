@@ -181,5 +181,50 @@ test('bad models fail with a code', () => {
   code(() => p.add(foreign), 'LP_PARAM');
   const int = new LpProblem('int');
   int.add(int.addVariable('n', 0, null, 'Integer').ge(1));
-  code(() => int.solveSync(), 'LP_UNSUPPORTED');
+  code(() => int.solveSync({ gapRel: -1 }), 'LP_PARAM');
+  code(() => int.solveSync({ nodeLimit: 1.5 }), 'LP_PARAM');
+  code(() => int.solveSync({ timeLimit: NaN }), 'LP_PARAM');
+});
+
+test('integer and binary variables: a knapsack, solved by branch-and-bound; no duals', () => {
+  const prob = new LpProblem('knapsack', LpMaximize);
+  const worth = [10, 13, 18, 31, 7, 15];
+  const weight = [11, 15, 20, 35, 10, 33];
+  const take = worth.map((_, i) => prob.addVariable(`take${i}`, null, null, 'Binary'));
+  prob.add(lpDot(worth, take));
+  prob.add(lpDot(weight, take).le(47), 'capacity');
+  const stats = prob.solveSync();
+  assert.equal(stats.status, LpSolveStatus.Optimal);
+  assert.equal(stats.isMip, true);
+  assert.equal(stats.hasSolution, true);
+  assert.equal(stats.objective, 41);
+  assert.equal(stats.bestBound, 41);
+  assert.deepEqual(take.map((v) => v.varValue), [1, 1, 1, 0, 0, 0]);
+  assert.deepEqual(take.map((v) => v.dj), [null, null, null, null, null, null]);
+  const cap = prob.getConstraintByName('capacity')!;
+  assert.equal(cap.pi, null);
+  assert.equal(cap.slack, 1);
+});
+
+test('an integer program: infeasible, unbounded or infeasible (Undefined, as PuLP 4.2), a node limit', () => {
+  const odd = new LpProblem('odd');
+  const w = odd.addVariable('w', 0, null, 'Integer');
+  odd.add(w);
+  odd.add(w.times(2).eq(1), 'half');
+  assert.equal(odd.solveSync().status, LpSolveStatus.Infeasible);
+  const up = new LpProblem('up', LpMaximize);
+  up.add(up.addVariable('z', 0, null, 'Integer'));
+  const s = up.solveSync();
+  assert.equal(s.status, LpSolveStatus.Undefined);
+  assert.equal(s.statusStr, 'Undefined');
+  assert.equal(s.hasSolution, false);
+  const lim = new LpProblem('lim', LpMaximize);
+  const a = lim.addVariable('a', 0, 10, 'Integer');
+  const b = lim.addVariable('b', 0, 10, 'Integer');
+  lim.add(a.plus(b));
+  lim.add(a.times(2).plus(b.times(2)).le(7), 'c');
+  const l = lim.solveSync({ nodeLimit: 1 });
+  assert.equal(l.status, LpSolveStatus.NodeLimit);
+  assert.equal(l.hasSolution, false);
+  assert.equal(l.bestBound, 3.5);
 });

@@ -45,22 +45,31 @@ becomes the objective, replacing the one before.
 
 `solve()` resolves to an `LpSolveStats`, PuLP 4.2's fields in camelCase: `solver` (`'smaltlp'`), `status` and
 `statusStr` ([`LpSolveStatus`](./lp-solve-status)), `hasSolution`, `objective` (`null` without a solution),
-`numVariables`, `numConstraints`, `isMip` and `time` (seconds). After an optimal solve, each variable's `varValue`
-and `dj`, and each constraint's `pi` and `slack`, are set; otherwise they are `null`.
+`numVariables`, `numConstraints`, `isMip`, `bestBound` and `time` (seconds). After an optimal solve, each variable's
+`varValue` and `dj`, and each constraint's `pi` and `slack`, are set; otherwise they are `null`.
+
+A problem with an `'Integer'` or `'Binary'` variable is an integer program, solved by branch-and-bound as
+[`milp`](../milp) solves it. Then `isMip` is `true`; `bestBound` is the bound the search proved, in the problem's own
+sense; `varValue` and `slack` are set wherever a solution was found, even when a limit stopped the search; and `dj` and
+`pi` stay `null`, since an integer program has no duals. For a linear program, `bestBound` is `null`.
+
+`solve(options)` takes `maxIter`, `tol` and `presolve`, and for an integer program `timeLimit` (seconds), `gapRel`
+(default 1e-4: stop once the answer is within this of the bound, relative) and `nodeLimit`.
 
 ## Errors
 
 - `LP_PARAM`: a `sense` other than 1 or -1; a variable with no name or an unknown `cat`; a second constraint with a
-  name already used; a variable from another problem in the objective or a constraint; `tol` or `maxIter` out of range.
+  name already used; a variable from another problem in the objective or a constraint; `tol`, `maxIter`, `timeLimit`,
+  `gapRel` or `nodeLimit` out of range.
 - `LP_VALUE`: a bound that is NaN or infinite.
-- `LP_UNSUPPORTED`: solving a problem with an `'Integer'` or `'Binary'` variable, until `milp()`.
 
 ## Notes
 
 `solve()` runs the same presolve and dual simplex as [`linprog`](../linprog), in 64-bit floats (`presolve: false` turns
 the presolve off). A maximization is solved as the
 minimization of its negative; `pi` and `dj` are given in the problem's own sense, as PuLP gives them. The compare tests
-check statuses, values, `pi`, `dj` and `slack` against PuLP 4.2.0 with HiGHS. `variables()` lists every variable
+check statuses, values, `pi`, `dj` and `slack` against PuLP 4.2.0 with HiGHS, and integer programs' statuses and
+objectives. `variables()` lists every variable
 added, used or not, as in PuLP 4.2. A problem with no objective finds any feasible point.
 
 ## Examples

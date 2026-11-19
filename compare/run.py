@@ -1,6 +1,7 @@
 """
 The compare tests' reference run (smaltworks ADR 0039, section 6): the same problems through scipy.optimize.linprog
-(HiGHS), PuLP (with its HiGHS solver) and HiGHS's MPS reader (highspy), written to fixtures/compare.json. CI checks
+and scipy.optimize.milp (HiGHS), PuLP (with its HiGHS solver) and HiGHS's MPS reader (highspy), written to
+fixtures/compare.json. CI checks
 smaltlp against that file without Python; `npm run compare` reruns this to add cases or check a new reference version.
 
 Every case is our own: hand-written, or generated here from a fixed seed. No outside test sets are stored.
@@ -14,7 +15,7 @@ import highspy
 import numpy as np
 import pulp
 import scipy
-from scipy.optimize import linprog
+from scipy.optimize import Bounds, LinearConstraint, linprog, milp
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -110,17 +111,84 @@ def linprog_cases():
 
 
 # ---------------------------------------------------------------------------------------------------------------------
+# milp cases: scipy.optimize.milp with a relative gap of 0, so its objective is the optimum, not one within 1e-4
+
+def milp_case(name, c, integrality, lb, ub, A=None, cl=None, cu=None):
+    n = len(c)
+    cons = LinearConstraint(A, cl, cu) if A is not None else None
+    res = milp(c, integrality=integrality, bounds=Bounds(lb, ub), constraints=cons, options={'mip_rel_gap': 0})
+    out = {'status': int(res.status)}
+    if res.status == 0:
+        out['fun'] = num(res.fun)
+    return {
+        'name': name,
+        'input': {
+            'c': list(c), 'integrality': list(integrality),
+            'lb': nums(np.broadcast_to(lb, n)), 'ub': nums(np.broadcast_to(ub, n)),
+            'A': A, 'cl': None if A is None else nums(np.broadcast_to(cl, len(A))), 'cu': None if A is None else nums(np.broadcast_to(cu, len(A))),
+        },
+        'scipy': out,
+    }
+
+
+def random_milp(seed):
+    """A random problem with integer and continuous columns, mostly in a box; sometimes infeasible."""
+    r = random.Random(1000 + seed)
+    n = r.randint(2, 12)
+    m = r.randint(1, 8)
+    integrality = [1 if r.random() < 0.7 else 0 for _ in range(n)]
+    lb = [r.randint(-3, 1) for _ in range(n)]
+    ub = [l + r.randint(1, 6) if r.random() < 0.85 else float('inf') for l in lb]
+    entry = lambda: r.randint(-9, 9) if r.random() < 0.6 else 0
+    A = [[entry() for _ in range(n)] for _ in range(m)]
+    x0 = [r.randint(l, l + 1) for l in lb]
+    act = [sum(a * x for a, x in zip(row, x0)) for row in A]
+    cl = [float('-inf') if r.random() < 0.7 else a - r.randint(0, 6) for a in act]
+    cu = [a + r.uniform(0, 8) if r.random() < 0.9 else float('inf') for a in act]
+    # Costs that make an unbounded column pay for going up.
+    c = [round(r.uniform(-10, 10), 2) if u != float('inf') else round(r.uniform(0.5, 10), 2) for u in ub]
+    if r.random() < 0.1:
+        # Infeasible for integers, though the relaxation may not be: 2 x_0 = 2k + 1.
+        A.append([2] + [0] * (n - 1))
+        cl.append(2 * x0[0] + 1)
+        cu.append(2 * x0[0] + 1)
+        integrality[0] = 1
+    return milp_case(f'random {seed}', c, integrality, lb, ub, A, cl, cu)
+
+
+def milp_cases():
+    inf = float('inf')
+    cases = [
+        milp_case("scipy's documentation example", [0, -1], [1, 1], 0, inf, [[-1, 1], [3, 2], [2, 3]], -inf, [1, 12, 12]),
+        milp_case('knapsack', [-10, -13, -18, -31, -7, -15], [1] * 6, 0, 1, [[11, 15, 20, 35, 10, 33]], -inf, [47]),
+        milp_case('mixed', [-1, -1], [1, 0], 0, inf, [[1, 2], [2, 0]], -inf, [4.5, 5]),
+        milp_case('assignment', [4, 2, 8, 4, 3, 7, 3, 1, 6], [1] * 9, 0, 1,
+                  [[1, 1, 1, 0, 0, 0, 0, 0, 0], [0, 0, 0, 1, 1, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0, 1, 1, 1],
+                   [1, 0, 0, 1, 0, 0, 1, 0, 0], [0, 1, 0, 0, 1, 0, 0, 1, 0], [0, 0, 1, 0, 0, 1, 0, 0, 1]], 1, 1),
+        milp_case('set cover', [3, 2, 4, 1, 2], [1] * 5, 0, 1,
+                  [[1, 1, 0, 0, 0], [0, 1, 1, 0, 0], [1, 0, 0, 1, 0], [0, 0, 1, 0, 1], [0, 0, 0, 1, 1], [1, 0, 1, 0, 0]], 1, inf),
+        milp_case('negative integer bounds', [1, -2], [1, 1], [-5.5, -3.2], [2.7, 4.9], [[1, 1]], -inf, [1.5]),
+        milp_case('infeasible for integers', [1], [1], 0, inf, [[2]], 1, 1),
+        milp_case('relaxation unbounded', [-1, 0], [1, 0], 0, inf),
+        milp_case('integer-unbounded line', [-1, -1], [1, 1], 0, inf, [[1, -1]], 0, 0),
+        milp_case('continuous only', [1, 2], [0, 0], 0, inf, [[1, 1]], 1.5, inf),
+    ]
+    cases += [random_milp(seed) for seed in range(1, 81)]
+    return cases
+
+
+# ---------------------------------------------------------------------------------------------------------------------
 # Modelling-layer cases: a JSON spec, built in PuLP and (by the test) in smaltlp
 
 def model_case(spec):
     prob = pulp.LpProblem(spec['name'], pulp.LpMaximize if spec['sense'] == 'maximize' else pulp.LpMinimize)
-    vs = {v['name']: prob.add_variable(v['name'], v.get('lowBound'), v.get('upBound')) for v in spec['variables']}
+    vs = {v['name']: prob.add_variable(v['name'], v.get('lowBound'), v.get('upBound'), v.get('cat', 'Continuous')) for v in spec['variables']}
     prob += pulp.lpSum(k * vs[n] for n, k in spec['objective'].items())
     for con in spec['constraints']:
         lhs = pulp.lpSum(k * vs[n] for n, k in con['terms'].items())
         rel = {'le': lhs <= con['rhs'], 'ge': lhs >= con['rhs'], 'eq': lhs == con['rhs']}[con['sense']]
         prob += rel, con['name']
-    stats = prob.solve(pulp.HiGHS(msg=0))
+    stats = prob.solve(pulp.HiGHS(msg=0, gapRel=0))
     out = {'status': int(stats.status), 'statusStr': stats.status_str, 'hasSolution': bool(stats.has_solution)}
     if stats.status == 1:
         out['objective'] = num(pulp.value(prob.objective))
@@ -159,6 +227,24 @@ def model_cases():
          'variables': [{'name': 'w', 'lowBound': 0}],
          'objective': {'w': 1},
          'constraints': [{'name': 'pos', 'terms': {'w': 1}, 'sense': 'ge', 'rhs': 0}]},
+        {'name': 'knapsack', 'sense': 'maximize',
+         'variables': [{'name': f'take{i}', 'cat': 'Binary'} for i in range(6)],
+         'objective': {f'take{i}': v for i, v in enumerate([10, 13, 18, 31, 7, 15])},
+         'constraints': [{'name': 'capacity', 'terms': {f'take{i}': w for i, w in enumerate([11, 15, 20, 35, 10, 33])}, 'sense': 'le', 'rhs': 47}]},
+        {'name': 'trucks', 'sense': 'minimize',
+         'variables': [{'name': 'small', 'lowBound': 0, 'cat': 'Integer'}, {'name': 'large', 'lowBound': 0, 'cat': 'Integer'},
+                       {'name': 'overtime', 'lowBound': 0, 'upBound': 8}],
+         'objective': {'small': 300, 'large': 520, 'overtime': 45},
+         'constraints': [{'name': 'tonnes', 'terms': {'small': 7, 'large': 13, 'overtime': 1.5}, 'sense': 'ge', 'rhs': 61},
+                         {'name': 'drivers', 'terms': {'small': 1, 'large': 1}, 'sense': 'le', 'rhs': 6}]},
+        {'name': 'odd', 'sense': 'minimize',
+         'variables': [{'name': 'v', 'lowBound': 0, 'cat': 'Integer'}],
+         'objective': {'v': 1},
+         'constraints': [{'name': 'half', 'terms': {'v': 2}, 'sense': 'eq', 'rhs': 1}]},
+        {'name': 'integers_unbounded', 'sense': 'maximize',
+         'variables': [{'name': 'k', 'lowBound': 0, 'cat': 'Integer'}],
+         'objective': {'k': 1},
+         'constraints': [{'name': 'pos', 'terms': {'k': 1}, 'sense': 'ge', 'rhs': 0}]},
     ]
     return [model_case(s) for s in specs]
 
@@ -304,10 +390,10 @@ def mps_case(name, text):
         'rowUp': nums(lp.row_upper_),
         'integer': [int(v) for v in lp.integrality_] if len(lp.integrality_) else [0] * lp.num_col_,
     }
-    if not any(out['integer']):
-        h.run()
-        if h.getModelStatus() == highspy.HighsModelStatus.kOptimal:
-            out['objective'] = num(h.getInfo().objective_function_value)
+    h.setOptionValue('mip_rel_gap', 0)
+    h.run()
+    if h.getModelStatus() == highspy.HighsModelStatus.kOptimal:
+        out['objective'] = num(h.getInfo().objective_function_value)
     return {'name': name, 'text': text, 'highs': out}
 
 
@@ -316,6 +402,7 @@ def main():
         'reference': {'highspy': highspy.__version__ if hasattr(highspy, '__version__') else '1.16.0',
                       'scipy': scipy.__version__, 'pulp': pulp.__version__, 'numpy': np.__version__},
         'linprog': linprog_cases(),
+        'milp': milp_cases(),
         'model': model_cases(),
         'mps': [mps_case(n, t) for n, t in MPS_FILES.items()],
     }

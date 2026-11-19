@@ -48,7 +48,7 @@ VERSION
 
 ## What it solves now
 
-Linear programs, with continuous variables. Integer and binary variables can be declared, and solving them fails with
-`LP_UNSUPPORTED` until `milp()` arrives. A presolve removes empty rows, fixed variables and singleton rows first. See
+Linear programs, and mixed-integer programs with integer and binary variables, by branch-and-bound over the same
+dual simplex. A presolve removes empty rows, fixed variables and singleton rows first. See
 [Where smaltlp differs](../reference/divergences)
 and, for how long solves take, the [benchmarks](../research/benchmarks).

@@ -129,7 +129,8 @@ test('bad input fails with a code', () => {
   code(() => linprogSync([1], { AUb: [[1]] }), 'LP_PARAM');
   code(() => linprogSync([1], { AUb: [[Infinity]], bUb: [1] }), 'LP_VALUE');
   code(() => linprogSync([1], { bounds: [[Infinity, null]] }), 'LP_VALUE');
-  code(() => linprogSync([1], { integrality: [1] }), 'LP_UNSUPPORTED');
+  code(() => linprogSync([1], { integrality: [2] }), 'LP_UNSUPPORTED');
+  code(() => linprogSync([1], { integrality: [1, 1] }), 'LP_SHAPE');
   code(() => linprogSync([1], { tol: 0 }), 'LP_PARAM');
   code(() => linprogSync([1, 2], { AUb: [[1, 2], [3]], bUb: [1, 2] }), 'LP_SHAPE');
 });

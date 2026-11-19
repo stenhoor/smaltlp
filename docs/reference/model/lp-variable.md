@@ -34,7 +34,8 @@ Given to `addVariable(name, lowBound, upBound, cat)`: see [`LpProblem`](./lp-pro
 
 `plus`, `minus` and `times` give an [`LpAffineExpression`](./lp-affine-expression); `le`, `ge` and `eq` give an
 [`LpConstraint`](./lp-constraint). After an optimal solve, `varValue` is the variable's value and `dj` its reduced
-cost: the objective's change, in the problem's own sense, per unit the variable moves off its bound.
+cost: the objective's change, in the problem's own sense, per unit the variable moves off its bound. In an integer
+program, `dj` stays `null`: it has no duals.
 
 ## Errors
 

@@ -52,5 +52,8 @@ const fromFile = mpsToProblem(readMps(text));
   `<=`, `>=`, `==`. `prob.add()` is PuLP's `+=`.
 - Bounds are numbers or `null` for none. `linprog` takes `[lower, upper]` pairs; `addVariable` takes them as
   arguments and refuses infinite ones, as PuLP does.
-- Integer variables fail with `LP_UNSUPPORTED` until `milp()`. Errors are `SmaltlpError`s with a `code`
-  ([Errors](../reference/errors)).
+- Integer programs: `milp(c, { integrality, bounds: { lb, ub }, constraints: { A, lb, ub } })`, scipy's, or
+  `'Integer'` and `'Binary'` variables in a model. They have no duals (`pi` and `dj` are `null`). An unbounded one is
+  status 4 from `milp`, `Undefined` in a model. Semi-continuous variables (`integrality` 2, 3) fail with
+  `LP_UNSUPPORTED`.
+- Errors are `SmaltlpError`s with a `code` ([Errors](../reference/errors)).
