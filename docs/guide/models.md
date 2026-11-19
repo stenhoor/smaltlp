@@ -59,7 +59,7 @@ take.map((v) => ({ item: v.name, take: v.varValue }))
 
 Each variable here is between 0 and 1, and a linear program may take part of an item; here the best picks happen to
 be whole ([`lpDot`](../reference/model/lp-sum#working-demo) shows one that isn't). Whole items only, always, is an
-integer program, which comes with `milp()`.
+integer program: see [Integer programs](./integers).
 
 ## Constraints by name
 

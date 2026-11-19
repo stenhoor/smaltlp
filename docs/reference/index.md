@@ -12,6 +12,11 @@ it raises, and examples with their tested results.
 - [`linprog`](./linprog): scipy.optimize.linprog's interface: minimize `c·x` over matrices and bounds.
   `@smaltworks/smaltlp/lp`
 
+## Integer programs
+
+- [`milp`](./milp): scipy.optimize.milp's interface: minimize `c·x` with some variables whole numbers, by
+  branch-and-bound. `@smaltworks/smaltlp/mip`
+
 ## Modelling
 
 From `@smaltworks/smaltlp/model`, in PuLP 4.2's style:

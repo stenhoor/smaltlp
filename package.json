@@ -44,6 +44,10 @@
       "types": "./dist/lp/index.d.ts",
       "default": "./dist/lp/index.js"
     },
+    "./mip": {
+      "types": "./dist/mip/index.d.ts",
+      "default": "./dist/mip/index.js"
+    },
     "./model": {
       "types": "./dist/model/index.d.ts",
       "default": "./dist/model/index.js"

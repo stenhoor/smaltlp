@@ -51,13 +51,13 @@ await prob.solve();
 ```
 
 `linprog()` takes scipy.optimize.linprog's parameters in camelCase (`A_ub` is `AUb`) and gives its status codes and
-result fields, duals (`marginals`) included. `integrality` fails with `LP_UNSUPPORTED`: integer variables come with
-`milp()` in phase 2.
+result fields, duals (`marginals`) included. `milp()` is scipy.optimize.milp's: integer variables by branch-and-bound
+over the same dual simplex, as are `'Integer'` and `'Binary'` variables in a model and `linprog()`'s `integrality`.
 
 ## What it will be
 
 - **Linear programs first, then mixed-integer programs:** a sparse, bounded dual simplex in 64-bit floats, with
-  presolve and scaling; then branch-and-bound, and cutting planes later.
+  presolve and scaling; then branch-and-bound (here now), with warm starts and cutting planes later.
 - **Two ways in, one core:** a typed modelling layer in PuLP's style, and scipy's `linprog()` and `milp()` over matrices.
 - **Models from files and tables:** MPS and CPLEX-LP files, read and written; models built from smaltdb results and
   smaltdf frames.

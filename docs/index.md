@@ -20,13 +20,13 @@ hero:
       link: https://github.com/stenhoor/smaltlp
 features:
   - title: The best answer within your limits
-    details: Costs, limits and choices as a linear program, solved to its optimum, with the duals that say what each limit is worth. Integer programs follow.
+    details: Costs, limits and choices as a linear program, solved to its optimum, with the duals that say what each limit is worth. Whole-number decisions too, by branch-and-bound.
   - title: scipy's linprog and PuLP's models
-    details: Solve from matrices with linprog(), scipy's interface, or build a model by name in PuLP 4.2's style. Read MPS files from other solvers.
+    details: Solve from matrices with linprog() and milp(), scipy's interfaces, or build a model by name in PuLP 4.2's style. Read MPS files from other solvers.
   - title: Exact, in 64-bit floats
     details: A bounded dual simplex in TypeScript, in the browser and in Node, with no runtime dependencies and no WebAssembly.
   - title: Checked against HiGHS
-    details: Every case is compared with scipy's linprog, PuLP and HiGHS's reader, and the results are kept as tests that run without Python.
+    details: Every case is compared with scipy's linprog and milp, PuLP and HiGHS's reader, and the results are kept as tests that run without Python.
 ---
 
 <!-- docs:skip -->

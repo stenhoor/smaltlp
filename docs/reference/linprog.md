@@ -15,6 +15,8 @@ interface LinprogOptions {
   bounds?: [number | null, number | null] | [number | null, number | null][];
   maxIter?: number;
   tol?: number;
+  presolve?: boolean;
+  integrality?: number | ArrayLike<number>;
 }
 ```
 
@@ -34,7 +36,9 @@ camelCase.
 - `tol` (default `1e-7`): how far outside its bounds a variable, and how far the wrong side of 0 a reduced cost, may be.
 - `presolve` (default `true`): remove empty rows, fixed variables and singleton rows before solving, and restore the
   solution and duals afterwards, as scipy's `presolve` option does for HiGHS.
-- `integrality`: not supported until `milp()`; giving it fails.
+- `integrality` (default `0`): each variable's kind, or one for every variable: `0` continuous, `1` integer, as
+  scipy's. With an integer variable, the problem is solved by branch-and-bound, as [`milp`](./milp) solves it with its
+  defaults.
 
 ## Returns
 
@@ -46,17 +50,20 @@ A `LinprogResult`, scipy's fields:
 - `slack` (`bUb − AUb·x`) and `con` (`bEq − AEq·x`).
 - `ineqlin`, `eqlin`, `lower`, `upper`: for the inequality rows, the equality rows and the two sides of the bounds,
   each a `residual` and the `marginals`: the change in `fun` per unit of that right-hand side or bound.
-- `nit`: the changes of basis made.
+- `nit`: the changes of basis made (over every node, with integer variables).
+- With integer variables, as scipy: `mipNodeCount`, `mipDualBound` and `mipGap`, as [`milp`](./milp) gives them. The
+  marginals are 0: an integer program has no duals. A problem whose relaxation is unbounded has status 4, "unbounded or
+  infeasible".
 
 ## Errors
 
-- `LP_SHAPE`: `c` empty; a matrix whose columns differ from `c`'s length; a right-hand side whose length differs
+- `LP_SHAPE`: `c` empty; `integrality` of the wrong length; a matrix whose columns differ from `c`'s length; a right-hand side whose length differs
   from its matrix's rows; rows of different lengths.
 - `LP_VALUE`: a NaN or infinite cost, matrix entry or right-hand side; a lower bound of Infinity or an upper bound of
   -Infinity.
 - `LP_PARAM`: a matrix without its right-hand side or the other way round; `tol` not between 0 and 1; `maxIter` not a
   whole number; `presolve` not `true` or `false`.
-- `LP_UNSUPPORTED`: `integrality`.
+- `LP_UNSUPPORTED`: `integrality` 2 (semi-continuous) or 3 (semi-integer).
 
 ## Notes
 
@@ -109,4 +116,5 @@ const plan = linprogSync(cost, { AUb: supply, bUb: [20, 30], AEq: demand, bEq: [
 
 ## See also
 
-[Solving from matrices](../guide/matrices), [Reading duals](../guide/duals), [`LpProblem`](./model/lp-problem)
+[Solving from matrices](../guide/matrices), [Reading duals](../guide/duals), [`milp`](./milp),
+[`LpProblem`](./model/lp-problem)

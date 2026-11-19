@@ -34,11 +34,11 @@ await linprog([1, 2], { AUb: [[1, 2, 3]], bUb: [4] })
 ```
 
 ```ts
-import { SmaltlpError } from '@smaltworks/smaltlp';
+import { linprog, SmaltlpError } from '@smaltworks/smaltlp';
 
 let code = '';
 try {
-  await linprog([1], { integrality: [1] });
+  await linprog([1], { integrality: [2] });
 } catch (e) {
   if (e instanceof SmaltlpError) code = e.code;
 }
@@ -47,4 +47,4 @@ code
 
 | value |
 | --- |
-|  |
+| LP\_UNSUPPORTED |
