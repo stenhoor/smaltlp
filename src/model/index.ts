@@ -452,11 +452,11 @@ export class LpProblem {
     if (res.status !== 0) return stats(STATUS[res.status], null);
     vars.forEach((v, j) => {
       v.varValue = res.x[j]!;
-      v.dj = sign * res.d[j]!;
+      v.dj = sign * res.d[j]! + 0;
     });
     cons.forEach((con, r) => {
       const activity = res.x[n + r]!;
-      con.pi = sign * res.d[n + r]!;
+      con.pi = sign * res.d[n + r]! + 0;
       con.slack = con.sense === LpConstraintLE ? con.rhs - activity : con.sense === LpConstraintGE ? activity - con.rhs : 0;
     });
     return stats(LpSolveStatus.Optimal, value(this.objective) ?? 0);

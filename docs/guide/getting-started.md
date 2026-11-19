@@ -19,10 +19,12 @@ uses:
 
 | Entry point | What it holds |
 | --- | --- |
-| `@smaltworks/smaltlp` | Everything below, and `SmaltlpError`, `VERSION` |
+| `@smaltworks/smaltlp` | Everything below but `/worker`, and `SmaltlpError`, `VERSION` |
 | `@smaltworks/smaltlp/lp` | `linprog`, `linprogSync` |
+| `@smaltworks/smaltlp/mip` | `milp`, `milpSync` |
 | `@smaltworks/smaltlp/model` | `LpProblem`, `LpVariable`, `LpAffineExpression`, `LpConstraint`, `lpSum`, `lpDot`, `value`, `LpSolveStatus`, `LpMinimize`, `LpMaximize`, `LpConstraintLE`, `LpConstraintEQ`, `LpConstraintGE` |
-| `@smaltworks/smaltlp/io` | `readMps`, `mpsToProblem` |
+| `@smaltworks/smaltlp/io` | `readMps`, `readLp`, `writeMps`, `writeLp`, `mpsToProblem`, `problemToModel` |
+| `@smaltworks/smaltlp/worker` | `startWorker`, `connect`, `serve`: solves in a Web Worker |
 
 ## Three ways in
 

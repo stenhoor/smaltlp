@@ -8,7 +8,11 @@
 //
 // test/docs-examples.test.ts runs every example the same way (runExample) and checks its printed result.
 import { stripTypes } from 'smaltkit/typescript'
-import * as smaltlp from '../../../src/index.ts'
+import * as root from '../../../src/index.ts'
+import * as worker from '../../../src/worker/index.ts'
+
+/** What examples import: the root's exports, and the worker entry's (which the root leaves out). */
+const smaltlp = { ...root, ...worker }
 import type { PlayResult, SetupStep } from './playground.ts'
 
 /** The code of a setup step. */

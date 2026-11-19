@@ -57,6 +57,11 @@
       "types": "./dist/io/index.d.ts",
       "default": "./dist/io/index.js"
     },
+    "./worker": {
+      "types": "./dist/worker/index.d.ts",
+      "default": "./dist/worker/index.js"
+    },
+    "./worker-script": "./dist/worker/worker.js",
     "./package.json": "./package.json"
   },
   "files": [
