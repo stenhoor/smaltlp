@@ -36,6 +36,8 @@ interface Example {
   line: number;
   end: number;
   table: { from: number; to: number } | null;
+  /** Text right under the table, left over from an earlier one: its line, or null. */
+  debris: number | null;
   code: string;
   fails?: string;
   setup: SetupStep[];
@@ -79,7 +81,9 @@ function examples(file: string): Example[] {
       while (j < lines.length && lines[j]!.startsWith('|')) j++;
       table = { from, to: j };
     }
-    out.push({ line: start + 1, end: i, table, code, fails, setup: setup.slice() });
+    // A table ends at a blank line or the file's end: text right under it is left over from an earlier table.
+    const debris = table && j < lines.length && lines[j]!.trim() ? j + 1 : null;
+    out.push({ line: start + 1, end: i, table, debris, code, fails, setup: setup.slice() });
     setup.push(fails !== undefined ? { sql: code.trim(), fails: true } : code.trim());
   }
   return out;
@@ -88,6 +92,10 @@ function examples(file: string): Example[] {
 /** A result as the Markdown table under its example. */
 function render(t: { columns: string[]; rows: string[][]; note?: string }): string[] {
   if (t.note !== undefined) return [];
+  // A line break would split a row over several lines: return the lines as rows instead.
+  for (const c of [...t.columns, ...t.rows.flat()]) {
+    if (/[\r\n]/.test(c)) throw new Error(`a result cell holds a line break, which a table can't show; return the lines as rows: ${JSON.stringify(c.slice(0, 40))}`);
+  }
   const rows = t.rows.length > LONG ? t.rows.slice(0, SHORT) : t.rows;
   // Escaped for Markdown: | ends a cell, VitePress reads {…} at a cell's end as attributes, and * and _ would turn
   // an expression such as 3*x + 2*y into emphasis.
@@ -132,6 +140,11 @@ for (const file of files) {
   if (list.length === 0) continue;
   describe(file.slice(DOCS.length), () => {
     for (const ex of list) {
+      if (ex.debris !== null) {
+        test(`line ${ex.line}'s table ends cleanly`, () => {
+          assert.fail(`${file}:${ex.debris}: text right under the table; a table ends at a blank line (left over from an earlier table?)`);
+        });
+      }
       test(`line ${ex.line} type-checks (smaltty)`, () => {
         const { code, first } = checkedCode(ex);
         const own = checkTypes(code).filter((w) => w.line >= first);
