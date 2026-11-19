@@ -151,6 +151,17 @@ class DualSimplex {
   private readonly candR: Float64Array;
   private readonly candH: Float64Array;
   private readonly candUsed: Uint8Array;
+  /** Work space reused every iteration, so a solve allocates them once: ρ, α_q, τ, and the pivot row with the list of
+   * its entries a row touched (only those can be nonzero) and a mark for each. */
+  private readonly rho: Float64Array;
+  private readonly alphaQ: Float64Array;
+  private readonly tau: Float64Array;
+  private readonly alphaRow: Float64Array;
+  private readonly touched: Int32Array;
+  private readonly isTouched: Uint8Array;
+  private nTouched = 0;
+  /** computePrimal's and computeDual's vectors, of length m. */
+  private readonly workM: Float64Array;
   private box = BOX_START;
   /** Whether the factorization came with the warm start. */
   private readonly given: boolean;
@@ -188,6 +199,13 @@ class DualSimplex {
     this.candR = new Float64Array(N);
     this.candH = new Float64Array(N);
     this.candUsed = new Uint8Array(N);
+    this.rho = new Float64Array(m);
+    this.alphaQ = new Float64Array(m);
+    this.tau = new Float64Array(m);
+    this.alphaRow = new Float64Array(N);
+    this.touched = new Int32Array(N);
+    this.isTouched = new Uint8Array(N);
+    this.workM = new Float64Array(m);
   }
 
   // -------------------------------------------------------------------------------------------------------------
@@ -229,19 +247,18 @@ class DualSimplex {
 
   /** The basic variables' values, from the nonbasic ones: B x_B = −N x_N. */
   private computePrimal(): void {
-    const rhs = new Float64Array(this.m);
+    const rhs = this.workM.fill(0);
     for (let j = 0; j < this.N; j++) if (this.kind[j] !== BASIC && this.x[j] !== 0) this.addColumn(j, -this.x[j]!, rhs);
     this.factor.ftran(rhs);
     for (let i = 0; i < this.m; i++) this.x[this.head[i]!] = rhs[i]!;
   }
 
   /** The duals y (Bᵀ y = c_B) and every nonbasic variable's reduced cost, d_j = c_j − yᵀ a_j. */
-  private computeDual(): Float64Array {
-    const y = new Float64Array(this.m);
+  private computeDual(): void {
+    const y = this.workM;
     for (let i = 0; i < this.m; i++) y[i] = this.cost[this.head[i]!]!;
     this.factor.btran(y);
     for (let j = 0; j < this.N; j++) this.d[j] = this.kind[j] === BASIC ? 0 : this.cost[j]! - this.dot(j, y);
-    return y;
   }
 
   /** Puts nonbasic variable j at the bound its reduced cost allows, or on an artificial bound. */
@@ -376,7 +393,7 @@ class DualSimplex {
     const { m, N } = this;
     const ptol = this.opts.primalTol;
     const dtol = this.opts.dualTol;
-    const alphaRow = new Float64Array(N);
+    const { alphaRow, touched, isTouched } = this;
     for (;;) {
       if (this.factor.updates >= REFACTOR && !this.reinvert()) return 4;
 
@@ -405,24 +422,49 @@ class DualSimplex {
 
       // The pivot row: ρ = B⁻ᵀ e_r, and α_rj = ρᵀ a_j for every nonbasic j, summed by rows over the rows where ρ isn't 0
       // (a logical's entry is −ρ_i); the basic variables' entries are 0.
-      const rho = new Float64Array(m);
+      // Only the entries a row touches can be nonzero: they are listed, and the passes below visit them alone.
+      const rho = this.rho.fill(0);
       rho[r] = 1;
       this.factor.btran(rho);
-      alphaRow.fill(0);
+      if (this.nTouched < 0) alphaRow.fill(0);
+      else {
+        for (let k = 0; k < this.nTouched; k++) {
+          alphaRow[touched[k]!] = 0;
+          isTouched[touched[k]!] = 0;
+        }
+      }
       const { rowStart, rowCol, rowVal, n } = this;
+      // Where the rows ρ touches hold N entries or more, the row is dense: keeping the list would only cost, so the
+      // passes visit every variable (nTouched = -1).
+      let work = 0;
+      for (let i = 0; i < m && work < N; i++) if (rho[i] !== 0) work += rowStart[i + 1]! - rowStart[i]! + 1;
+      const dense = work >= N;
+      let nt = 0;
       for (let i = 0; i < m; i++) {
         const ri = rho[i]!;
         if (ri === 0) continue;
-        for (let q = rowStart[i]!; q < rowStart[i + 1]!; q++) alphaRow[rowCol[q]!]! += ri * rowVal[q]!;
+        if (dense) {
+          for (let q = rowStart[i]!; q < rowStart[i + 1]!; q++) alphaRow[rowCol[q]!]! += ri * rowVal[q]!;
+        } else {
+          for (let q = rowStart[i]!; q < rowStart[i + 1]!; q++) {
+            const j = rowCol[q]!;
+            if (!isTouched[j]) (isTouched[j] = 1), (touched[nt++] = j);
+            alphaRow[j]! += ri * rowVal[q]!;
+          }
+          if (!isTouched[n + i]) (isTouched[n + i] = 1), (touched[nt++] = n + i);
+        }
         alphaRow[n + i] = -ri;
       }
+      this.nTouched = dense ? -1 : nt;
+      const visit = dense ? N : nt;
       for (let i = 0; i < m; i++) alphaRow[this.head[i]!] = 0;
 
       // The ratio test. With α̂_j = s α_rj, d_j becomes d_j + t α̂_j as the dual step t grows; candidate j's breakpoint
       // is where d_j would change sign.
       const { candJ, candA, candR, candH, candUsed } = this;
       let nc = 0;
-      for (let j = 0; j < N; j++) {
+      for (let t = 0; t < visit; t++) {
+        const j = dense ? t : touched[t]!;
         const k = this.kind[j]!;
         if (k === BASIC || k === FIXED) continue;
         const a = s * alphaRow[j]!;
@@ -459,12 +501,12 @@ class DualSimplex {
       while (flips.length < nc - 1) {
         let c = -1;
         if (flips.length < 8) {
-          for (let i = 0; i < nc; i++) if (!candUsed[i] && (c < 0 || candR[i]! < candR[c]!)) c = i;
+          for (let i = 0; i < nc; i++) if (!candUsed[i] && (c < 0 || candR[i]! < candR[c]! || (candR[i] === candR[c] && candJ[i]! < candJ[c]!))) c = i;
         } else {
           if (!order) {
             const rest: number[] = [];
             for (let i = 0; i < nc; i++) if (!candUsed[i]) rest.push(i);
-            order = Int32Array.from(rest.sort((u, v) => candR[u]! - candR[v]! || u - v));
+            order = Int32Array.from(rest.sort((u, v) => candR[u]! - candR[v]! || candJ[u]! - candJ[v]!));
           }
           c = order[next++]!;
         }
@@ -484,13 +526,13 @@ class DualSimplex {
       let chosen = -1;
       for (let i = 0; i < nc; i++) {
         if (candUsed[i] || candR[i]! > bound) continue;
-        if (chosen < 0 || candA[i]! > candA[chosen]! || (candA[i] === candA[chosen] && candR[i]! < candR[chosen]!)) chosen = i;
+        if (chosen < 0 || candA[i]! > candA[chosen]! || (candA[i] === candA[chosen] && (candR[i]! < candR[chosen]! || (candR[i] === candR[chosen] && candJ[i]! < candJ[chosen]!)))) chosen = i;
       }
       const q = candJ[chosen]!;
       const t = candR[chosen]!;
 
       // The entering column, and a check that it agrees with the pivot row.
-      const alphaQ = new Float64Array(m);
+      const alphaQ = this.alphaQ.fill(0);
       this.addColumn(q, 1, alphaQ);
       this.factor.ftran(alphaQ);
       const arq = alphaQ[r]!;
@@ -521,13 +563,18 @@ class DualSimplex {
       this.x[p] = target;
 
       // The dual step: d_j += s t α_rj, and the leaving variable's reduced cost is s t.
-      for (let j = 0; j < N; j++) if (this.kind[j] !== BASIC && j !== q) this.d[j]! += s * t * alphaRow[j]!;
+      // Untouched entries of the row are 0, so their reduced costs don't move.
+      for (let k = 0; k < visit; k++) {
+        const j = dense ? k : touched[k]!;
+        if (this.kind[j] !== BASIC && j !== q) this.d[j]! += s * t * alphaRow[j]!;
+      }
       this.d[q] = 0;
       this.d[p] = s * t;
 
       // The steepest edge weights for the new basis: τ = B⁻¹ ρ, then w_r' = w_r / α_rq² and, for every other row,
       // w_i' = w_i − 2 (α_iq / α_rq) τ_i + (α_iq / α_rq)² w_r, kept above a small floor against rounding.
-      const tau = this.factor.ftran(rho.slice());
+      this.tau.set(rho);
+      const tau = this.factor.ftran(this.tau);
       const wr = this.weight[r]!;
       for (let i = 0; i < m; i++) {
         if (i === r) continue;
