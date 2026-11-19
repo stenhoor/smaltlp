@@ -9,3 +9,4 @@ export * from './lp/index.ts';
 export * from './mip/index.ts';
 export * from './model/index.ts';
 export * from './io/index.ts';
+export * from './tables/index.ts';

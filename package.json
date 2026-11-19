@@ -57,6 +57,10 @@
       "types": "./dist/io/index.d.ts",
       "default": "./dist/io/index.js"
     },
+    "./tables": {
+      "types": "./dist/tables/index.d.ts",
+      "default": "./dist/tables/index.js"
+    },
     "./worker": {
       "types": "./dist/worker/index.d.ts",
       "default": "./dist/worker/index.js"
