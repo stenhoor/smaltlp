@@ -12,8 +12,8 @@ fails with `LP_UNSUPPORTED`; it never answers differently.
 - **Semi-continuous and semi-integer variables:** `integrality` 2 and 3, in `milp` and `linprog`.
 - **`milp` options:** `disp`. scipy's `milp` takes a constraint as a tuple `(A, lb, ub)` too; smaltlp takes
   `{ A, lb, ub }` only.
-- **Branch-and-bound:** each node is solved from the start, not from its parent's basis, and there are no cutting
-  planes, primal heuristics or MIP presolve, so smaltlp takes far longer than HiGHS on larger integer programs.
+- **Branch-and-bound:** no cutting planes, primal heuristics or MIP presolve (presolve simplifies the root's linear
+  program only), so smaltlp takes far longer than HiGHS on larger integer programs.
 - **`linprog` options:** `method`, `callback`, `x0` and scipy's other `options`: only `maxIter` and `tol`.
 - **Model files:** writing MPS, and the CPLEX LP format, in either direction. MPS SC bounds, quadratic sections and
   more than one RHS, RANGES or BOUNDS set.

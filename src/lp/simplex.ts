@@ -44,6 +44,12 @@ export interface SimplexOptions {
   primalTol: number;
   /** Dual feasibility: how far a reduced cost may have the wrong sign. */
   dualTol: number;
+  /**
+   * A basis to start from (a warm start): the m basic variables, as indices into the n structurals then the m
+   * logicals, such as an earlier result's `basis`. Where it isn't m distinct variables, or its matrix is singular, the
+   * solve starts from the logicals instead. Its dual steepest edge weights start at 1.
+   */
+  basis?: ArrayLike<number>;
 }
 
 export interface SimplexResult {
@@ -56,6 +62,8 @@ export interface SimplexResult {
   d: Float64Array;
   /** Whether each variable was nonbasic at its lower bound (-1), upper bound (1), or neither (0). */
   at: Int8Array;
+  /** The optimal basis's m basic variables (structurals then logicals), to start a later solve from; null unless status is 0. */
+  basis: Int32Array | null;
 }
 
 const BASIC = 0;
@@ -258,10 +266,19 @@ class DualSimplex {
 
   run(): SimplexResult {
     const { m, N } = this;
-    // Every structural starts nonbasic (placed below, once its reduced cost is known); the logicals are the basis.
+    // The logicals are the first basis, unless a warm start gives another; every other variable starts nonbasic
+    // (placed below, once its reduced cost is known).
+    const warm = this.warmStart();
     this.kind.fill(FREE);
     for (let i = 0; i < m; i++) this.kind[this.head[i]!] = BASIC;
-    if (!this.refactor()) return this.finish(4);
+    if (!this.refactor()) {
+      if (!warm) return this.finish(4);
+      // A singular warm start: start from the logicals after all.
+      for (let i = 0; i < m; i++) this.head[i] = this.n + i;
+      this.kind.fill(FREE);
+      for (let i = 0; i < m; i++) this.kind[this.head[i]!] = BASIC;
+      if (!this.refactor()) return this.finish(4);
+    }
     this.computeDual();
     for (let j = 0; j < N; j++) if (this.kind[j] !== BASIC) this.place(j);
     this.computePrimal();
@@ -281,6 +298,20 @@ class DualSimplex {
       }
       return this.finish(0);
     }
+  }
+
+  /** Takes the warm start's basis into `head`, if it is m distinct variables. Returns whether it did. */
+  private warmStart(): boolean {
+    const basis = this.opts.basis;
+    if (!basis || basis.length !== this.m) return false;
+    const seen = new Uint8Array(this.N);
+    for (let i = 0; i < this.m; i++) {
+      const j = basis[i]!;
+      if (!Number.isInteger(j) || j < 0 || j >= this.N || seen[j]) return false;
+      seen[j] = 1;
+    }
+    for (let i = 0; i < this.m; i++) this.head[i] = basis[i]!;
+    return true;
   }
 
   /** Dual simplex iterations until the basic variables are within their bounds. 0 when they are. */
@@ -540,6 +571,6 @@ class DualSimplex {
     for (let j = 0; j < this.N; j++) {
       if (this.kind[j] === FIXED) at[j] = this.d[j]! >= 0 ? -1 : 1;
     }
-    return { status, nit: this.nit, x: this.x, d: this.d, at };
+    return { status, nit: this.nit, x: this.x, d: this.d, at, basis: status === 0 ? this.head.slice() : null };
   }
 }

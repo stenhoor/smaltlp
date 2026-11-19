@@ -33,7 +33,8 @@
     "docs:preview": "vitepress preview docs",
     "bench": "npm run build && node bench/smaltlp.mjs",
     "bench:python": "python3 bench/reference.py",
-    "bench:report": "node bench/report.mjs"
+    "bench:report": "node bench/report.mjs",
+    "bench:warm": "npm run build && node bench/warm.mjs"
   },
   "exports": {
     ".": {

@@ -246,7 +246,7 @@ export interface SolveOptions {
   maxIter?: number;
   /** Primal and dual feasibility tolerance. Default 1e-7. */
   tol?: number;
-  /** Simplify the problem before solving it (each node's, for an integer program). Default true. */
+  /** Simplify the problem before solving it (the root's linear program, for an integer program). Default true. */
   presolve?: boolean;
   /** An integer program's time limit, in seconds, as PuLP's solvers take it. Default: none. */
   timeLimit?: number;
