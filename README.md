@@ -57,7 +57,7 @@ over the same dual simplex, as are `'Integer'` and `'Binary'` variables in a mod
 ## What it will be
 
 - **Linear programs first, then mixed-integer programs:** a sparse, bounded dual simplex in 64-bit floats, with
-  presolve and scaling; then branch-and-bound (here now), with warm starts and cutting planes later.
+  presolve and scaling; then branch-and-bound with warm starts (here now), and cutting planes later.
 - **Two ways in, one core:** a typed modelling layer in PuLP's style, and scipy's `linprog()` and `milp()` over matrices.
 - **Models from files and tables:** MPS and CPLEX-LP files, read and written; models built from smaltdb results and
   smaltdf frames.

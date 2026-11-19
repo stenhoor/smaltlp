@@ -1,5 +1,5 @@
 ---
-description: 'How fast smaltlp solves linear programs, timed beside HiGHS on the same problems and the same machine, with the method.'
+description: 'How fast smaltlp solves linear programs, timed beside HiGHS on the same problems and the same machine, and what warm starts save in branch-and-bound, with the method.'
 ---
 
 # Benchmarks
@@ -56,3 +56,35 @@ iteration costs.
   it is, so runs compare.
 - **One machine, one run of each:** the cloud VM these ran on varies between runs, so read the ratios, not the last
   digit.
+
+## Branch-and-bound: warm starts
+
+How much starting each node from its parent's basis saves, against solving each node from the start, in smaltlp
+alone. There is no HiGHS column here yet: HiGHS's MIP solver has cutting planes, heuristics and its own presolve, so a
+time beside it would measure those, not this.
+
+- **Problems:** multi-dimensional knapsacks from a seeded generator (`bench/warm.mjs`): m rows of whole weights from
+  1 to 30, each row's capacity half its total, and n binary items worth 1 to 40.
+- **Both ways:** the same branch-and-bound, to a gap of 0, so both prove the same optimum. *Warm* starts every node
+  below the root from its parent's optimal basis; *cold* solves every node from the start, with presolve, as smaltlp did
+  before warm starts.
+- **Timing:** the median of 3 runs after a warm-up, in one process, on one thread.
+- **Rerun:** `npm run bench:warm` (after `npm run build`), which writes the table below.
+
+<!-- bench:warm -->
+
+| Problem | Rows × columns | Nodes | Iterations: warm | Iterations: cold | Warm, ms | Cold, ms | Warm ÷ cold, time |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| knapsack-10x30 | 10 × 30 | 306 | 834 | 1981 | 26.8 | 51.5 | 0.52 |
+| knapsack-15x50 | 15 × 50 | 550 | 2412 | 5998 | 94.7 | 175 | 0.54 |
+| knapsack-20x60 | 20 × 60 | 1404 | 5464 | 14733 | 300 | 580 | 0.52 |
+| knapsack-30x80 | 30 × 80 | 229 | 949 | 2690 | 55.1 | 139 | 0.40 |
+
+Run 2026-11-19: smaltlp 0.14.0 on Node 22.23.5. CPU: Intel(R) Xeon(R) Processor @ 2.10GHz. Both prove the same optimum.
+
+<!-- /bench:warm -->
+
+- **The same search, fewer iterations.** Both ways visit the same nodes; warm starts take 35% to 42% of the
+  iterations.
+- **Time falls less than iterations,** to 0.40 to 0.54 of cold: a warm-started node still factors its basis afresh and
+  computes its values and duals from the start, work that doesn't shrink with the iterations.

@@ -8,13 +8,14 @@
  * INT_TOL), the node branches on the most fractional one, x_j = v: one child has x_j ≤ ⌊v⌋, the other x_j ≥ ⌈v⌉.
  * The child on the side v is nearer to is searched first.
  *
- * Each node is solved from the start, with presolve when it is on (warm starts from the parent's basis come later).
- * Written from the textbook method (Land and Doig, Econometrica, 1960; Wolsey, Integer Programming, 2020), not from any
+ * The root is solved with presolve when it is on; every other node starts the dual simplex from its parent's optimal
+ * basis (a warm start). Branching changes only bounds, so that basis is still dual feasible, and the dual simplex
+ * needs only the few changes of basis the new bound forces. Written from the textbook method (Land and Doig, Econometrica, 1960; Wolsey, Integer Programming, 2020), not from any
  * solver's code.
  * @module
  */
 import { solve } from '../lp/presolve.ts';
-import type { Lp } from '../lp/simplex.ts';
+import { dualSimplex, type Lp } from '../lp/simplex.ts';
 
 /** How far an integer column's value may be from a whole number and still count as integral: HiGHS's default. */
 export const INT_TOL = 1e-6;
@@ -35,6 +36,8 @@ export interface BranchOptions {
   tol: number;
   /** The most simplex iterations at each node. */
   maxIter: number;
+  /** Start each node from its parent's basis. Default true; false solves every node from the start. */
+  warmStart?: boolean;
 }
 
 /**
@@ -68,6 +71,8 @@ interface Node {
   colUp: Float64Array;
   /** The parent's relaxation value: a lower bound on this node's. */
   bound: number;
+  /** The parent's optimal basis, to start from; null at the root. */
+  basis: Int32Array | null;
 }
 
 /** Minimizes cᵀx over lp, with the columns marked integer taking whole values. */
@@ -88,7 +93,8 @@ export function branchAndBound(lp: Lp, opts: BranchOptions): BranchResult {
   let objective = Infinity;
   let nodes = 0;
   let nit = 0;
-  const open: Node[] = [{ colLo, colUp, bound: -Infinity }];
+  const open: Node[] = [{ colLo, colUp, bound: -Infinity, basis: null }];
+  const warm = opts.warmStart ?? true;
   const result = (end: BranchEnd): BranchResult => {
     let dualBound = x ? objective : Infinity;
     for (const node of open) dualBound = Math.min(dualBound, node.bound);
@@ -116,7 +122,10 @@ export function branchAndBound(lp: Lp, opts: BranchOptions): BranchResult {
     let empty = false;
     for (let j = 0; j < n && !empty; j++) if (node.colLo[j]! > node.colUp[j]!) empty = true;
     if (empty) continue;
-    const res = solve({ ...lp, colLo: node.colLo, colUp: node.colUp }, { maxIter: opts.maxIter, primalTol: opts.tol, dualTol: opts.tol, presolve: opts.presolve });
+    const nodeLp = { ...lp, colLo: node.colLo, colUp: node.colUp };
+    const simplex = { maxIter: opts.maxIter, primalTol: opts.tol, dualTol: opts.tol };
+    // The root with presolve (if on); below it, the dual simplex from the parent's basis.
+    const res = node.basis && warm ? dualSimplex(nodeLp, { ...simplex, basis: node.basis }) : solve(nodeLp, { ...simplex, presolve: opts.presolve && (nodes === 0 || !warm) });
     nodes++;
     nit += res.nit;
     if (res.status === 2) continue;
@@ -157,9 +166,9 @@ export function branchAndBound(lp: Lp, opts: BranchOptions): BranchResult {
       continue;
     }
     const v = res.x[branch]!;
-    const down: Node = { colLo: node.colLo, colUp: node.colUp.slice(), bound: value };
+    const down: Node = { colLo: node.colLo, colUp: node.colUp.slice(), bound: value, basis: res.basis };
     down.colUp[branch] = Math.floor(v);
-    const up: Node = { colLo: node.colLo.slice(), colUp: node.colUp, bound: value };
+    const up: Node = { colLo: node.colLo.slice(), colUp: node.colUp, bound: value, basis: res.basis };
     up.colLo[branch] = Math.ceil(v);
     // The nearer side last, so depth-first search takes it next.
     if (v - Math.floor(v) < 0.5) open.push(up, down);

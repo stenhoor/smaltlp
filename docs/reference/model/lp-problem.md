@@ -21,8 +21,12 @@ class LpProblem {
   numVariables(): number;
   numConstraints(): number;
   isMIP(): boolean;
-  solve(options?: { maxIter?: number; tol?: number; presolve?: boolean }): Promise<LpSolveStats>;
-  solveSync(options?: { maxIter?: number; tol?: number; presolve?: boolean }): LpSolveStats;
+  solve(options?: SolveOptions): Promise<LpSolveStats>;
+  solveSync(options?: SolveOptions): LpSolveStats;
+}
+interface SolveOptions {
+  maxIter?: number; tol?: number; presolve?: boolean;
+  timeLimit?: number; gapRel?: number; nodeLimit?: number; // integer programs
 }
 ```
 
@@ -53,7 +57,7 @@ A problem with an `'Integer'` or `'Binary'` variable is an integer program, solv
 sense; `varValue` and `slack` are set wherever a solution was found, even when a limit stopped the search; and `dj` and
 `pi` stay `null`, since an integer program has no duals. For a linear program, `bestBound` is `null`.
 
-`solve(options)` takes `maxIter`, `tol` and `presolve`, and for an integer program `timeLimit` (seconds), `gapRel`
+`solve(options)` takes `maxIter`, `tol` and `presolve` (for an integer program, presolve simplifies the root), and for an integer program `timeLimit` (seconds), `gapRel`
 (default 1e-4: stop once the answer is within this of the bound, relative) and `nodeLimit`.
 
 ## Errors

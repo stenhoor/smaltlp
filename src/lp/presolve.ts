@@ -12,7 +12,8 @@
  *
  * Postsolve restores every column's value, gives every row its dual (the reduced problem's for the rows that stayed),
  * and recomputes every column's reduced cost from the original problem, d = c − Aᵀy, so the result is the original
- * problem's, duals included. Written from the published descriptions (Andersen and Andersen, Mathematical Programming,
+ * problem's, duals included. It gives a basis for the original problem too, to start a later solve from: the reduced
+ * basis, a dropped row's column where the row is binding (its logical otherwise), and an empty row's logical. Written from the published descriptions (Andersen and Andersen, Mathematical Programming,
  * 1995; Maros, Computational Techniques of the Simplex Method, 2003), not from any solver's code.
  * @module
  */
@@ -48,7 +49,7 @@ function presolveAndSolve(lp: Lp, opts: SimplexOptions): SimplexResult {
   const removed: { i: number; j: number; a: number; lo: number; up: number }[] = [];
   const fixedValue = new Float64Array(n);
 
-  const infeasible = (): SimplexResult => ({ status: 2, nit: 0, x: new Float64Array(n + m), d: new Float64Array(n + m), at: new Int8Array(n + m) });
+  const infeasible = (): SimplexResult => ({ status: 2, nit: 0, x: new Float64Array(n + m), d: new Float64Array(n + m), at: new Int8Array(n + m), basis: null });
 
   for (let changed = true; changed; ) {
     changed = false;
@@ -117,7 +118,7 @@ function presolveAndSolve(lp: Lp, opts: SimplexOptions): SimplexResult {
     rowUp: Float64Array.from(keepRows, (i) => rowUp[i]!),
   };
   const res = dualSimplex(reduced, opts);
-  if (res.status !== 0) return { ...res, x: new Float64Array(n + m), d: new Float64Array(n + m), at: new Int8Array(n + m) };
+  if (res.status !== 0) return { ...res, x: new Float64Array(n + m), d: new Float64Array(n + m), at: new Int8Array(n + m), basis: null };
 
   // Postsolve: the columns' values, then every row's dual, then every column's reduced cost from the original problem.
   const nr = keepCols.length;
@@ -131,6 +132,10 @@ function presolveAndSolve(lp: Lp, opts: SimplexOptions): SimplexResult {
   const aty = multiplyTransposed(A, y);
   for (let j = 0; j < n; j++) d[j] = c[j]! - aty[j]!;
   const rowsByIndex = rowEntries;
+  // The basis: the reduced problem's, in the original's numbering, then one variable for each row dropped.
+  const isBasic = new Uint8Array(n + m);
+  for (const b of res.basis!) isBasic[b < nr ? keepCols[b]! : n + keepRows[b - nr]!] = 1;
+  const bindingRow = new Uint8Array(m);
   // The dropped singleton rows, last dropped first: each row dropped later is settled before the rows it depended on.
   // A row gets a dual where its column ends at a bound it implied, tighter than the column's own, on the side the
   // column's reduced cost presses on: then the row is binding, and its dual takes the reduced cost, d_j / a.
@@ -140,6 +145,7 @@ function presolveAndSolve(lp: Lp, opts: SimplexOptions): SimplexResult {
     const binding = (dj > 0 && x[j] === lo && lo > lp.colLo[j]!) || (dj < 0 && x[j] === up && up < lp.colUp[j]!);
     if (!binding) continue;
     const dy = dj / a;
+    bindingRow[i] = 1;
     y[i]! += dy;
     for (const { j: k, a: aik } of rowsByIndex[i]!) d[k]! -= aik * dy;
   }
@@ -148,6 +154,16 @@ function presolveAndSolve(lp: Lp, opts: SimplexOptions): SimplexResult {
     x[n + i] = ax[i]!;
     d[n + i] = y[i]!;
   }
+  // A binding row's column becomes basic, where it isn't already, and the row's logical leaves; every other dropped
+  // row's logical is basic. Each column has at most one binding row: crediting one sets its reduced cost to 0.
+  for (let i = 0; i < m; i++) {
+    if (!rowGone[i]) continue;
+    const entry = bindingRow[i] ? removed.find((r) => r.i === i)! : null;
+    if (entry && !isBasic[entry.j]) isBasic[entry.j] = 1;
+    else isBasic[n + i] = 1;
+  }
+  const basis = new Int32Array(m);
+  for (let k = 0, j = 0; j < n + m; j++) if (isBasic[j]) basis[k++] = j;
   // Which bound each original column ends at, for the marginals.
   const at = new Int8Array(n + m);
   for (let j = 0; j < n; j++) {
@@ -157,6 +173,6 @@ function presolveAndSolve(lp: Lp, opts: SimplexOptions): SimplexResult {
     else if (atLo) at[j] = -1;
     else if (atUp) at[j] = 1;
   }
-  return { status: 0, nit: res.nit, x, d, at };
+  return { status: 0, nit: res.nit, x, d, at, basis };
 }
 

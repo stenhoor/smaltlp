@@ -42,7 +42,7 @@ export interface MilpOptions {
   timeLimit?: number;
   /** Stop when (objective − bound) / |objective| is at most this. Default 1e-4, HiGHS's. */
   mipRelGap?: number;
-  /** Simplify each node's problem before solving it. Default true. */
+  /** Simplify the root's linear program before solving it; the nodes below it start from their parent's basis. Default true. */
   presolve?: boolean;
 }
 

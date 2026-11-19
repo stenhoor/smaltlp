@@ -96,7 +96,7 @@ model.
 
 ## What to know
 
-- Each node is solved from the start, and there are no cutting planes yet: problems with many integer variables take
-  far longer than in HiGHS. Small and medium problems are the aim (smaltworks ADR 0039).
+- Each node starts from its parent's basis, but there are no cutting planes yet: problems with many integer variables
+  take far longer than in HiGHS. Small and medium problems are the aim (smaltworks ADR 0039).
 - Semi-continuous and semi-integer variables (scipy's `integrality` 2 and 3) fail with `LP_UNSUPPORTED`.
 - See [Where smaltlp differs](../reference/divergences) for the rest.

@@ -42,7 +42,8 @@ for the variables marked integer. scipy's
 - `timeLimit` (default: none): the most seconds to spend.
 - `mipRelGap` (default `1e-4`, HiGHS's): stop once `(fun − mipDualBound) / |fun|` is at most this. `0` searches until
   the optimum is proven.
-- `presolve` (default `true`): simplify each node's linear program before solving it.
+- `presolve` (default `true`): simplify the root's linear program before solving it. The nodes below it start from
+  their parent's basis.
 
 ## Returns
 
@@ -71,9 +72,10 @@ A `MilpResult`, scipy's fields in camelCase:
 
 Solved by branch-and-bound over the [`linprog`](./linprog) dual simplex. The search goes depth first until it finds a
 first integer solution, then takes the open node with the lowest bound. It branches on the integer variable whose
-value is furthest from a whole number. A value within 1e-6 of a whole number counts as whole, as in HiGHS. Each node is
-solved from the start, without the parent's basis, and there are no cutting planes or heuristics yet, so smaltlp
-solves fewer problems than HiGHS in the same time.
+value is furthest from a whole number. A value within 1e-6 of a whole number counts as whole, as in HiGHS. Each node below
+the root starts the dual simplex from its parent's optimal basis (a warm start), which takes fewer than half the
+iterations of solving it from the start ([benchmarks](../research/benchmarks#branch-and-bound-warm-starts)). There are
+no cutting planes or heuristics yet, so smaltlp solves fewer problems than HiGHS in the same time.
 
 The compare tests solve 90 problems to a gap of 0 with scipy 1.18.1 (HiGHS) and smaltlp: the status and `fun` agree
 within 1e-7, and `x` is whole, within its bounds and feasible. Where several solutions are optimal, `x` may be another
