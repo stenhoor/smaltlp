@@ -8,13 +8,13 @@
    "rows": 10,
    "cols": 30,
    "warm": {
-    "milliseconds": 22.231423000000007,
+    "milliseconds": 16.369215000000025,
     "nodes": 306,
     "iterations": 831,
     "objective": -445
    },
    "cold": {
-    "milliseconds": 48.90873600000003,
+    "milliseconds": 43.90520099999998,
     "nodes": 306,
     "iterations": 1981,
     "objective": -445
@@ -24,13 +24,13 @@
    "rows": 15,
    "cols": 50,
    "warm": {
-    "milliseconds": 43.39844400000004,
+    "milliseconds": 36.18914099999995,
     "nodes": 548,
     "iterations": 2411,
     "objective": -742
    },
    "cold": {
-    "milliseconds": 213.36425499999996,
+    "milliseconds": 167.6441870000001,
     "nodes": 550,
     "iterations": 5998,
     "objective": -742
@@ -40,13 +40,13 @@
    "rows": 20,
    "cols": 60,
    "warm": {
-    "milliseconds": 157.11152900000025,
+    "milliseconds": 145.59186199999976,
     "nodes": 1404,
     "iterations": 5463,
     "objective": -844
    },
    "cold": {
-    "milliseconds": 611.1505500000003,
+    "milliseconds": 644.9339209999998,
     "nodes": 1404,
     "iterations": 14733,
     "objective": -844
@@ -56,13 +56,13 @@
    "rows": 30,
    "cols": 80,
    "warm": {
-    "milliseconds": 33.468049000000065,
+    "milliseconds": 42.6865029999999,
     "nodes": 229,
     "iterations": 948,
     "objective": -1172
    },
    "cold": {
-    "milliseconds": 131.67740400000002,
+    "milliseconds": 141.2696109999997,
     "nodes": 229,
     "iterations": 2690,
     "objective": -1172
@@ -72,13 +72,13 @@
    "rows": 40,
    "cols": 310,
    "warm": {
-    "milliseconds": 12.478425000000243,
+    "milliseconds": 10.610413999999764,
     "nodes": 70,
     "iterations": 584,
     "objective": 4207.530000000001
    },
    "cold": {
-    "milliseconds": 79.45405000000028,
+    "milliseconds": 64.42270399999961,
     "nodes": 70,
     "iterations": 4452,
     "objective": 4207.530000000001
@@ -88,13 +88,13 @@
    "rows": 65,
    "cols": 765,
    "warm": {
-    "milliseconds": 13.510026999999354,
+    "milliseconds": 12.640000999999756,
     "nodes": 45,
     "iterations": 535,
     "objective": 4032.9
    },
    "cold": {
-    "milliseconds": 110.06838100000004,
+    "milliseconds": 99.46291500000007,
     "nodes": 45,
     "iterations": 4202,
     "objective": 4032.9
@@ -104,13 +104,13 @@
    "rows": 80,
    "cols": 1220,
    "warm": {
-    "milliseconds": 102.57181700000001,
+    "milliseconds": 88.56122899999991,
     "nodes": 228,
     "iterations": 3191,
     "objective": 4580.490000000001
    },
    "cold": {
-    "milliseconds": 976.3749749999988,
+    "milliseconds": 644.8928369999994,
     "nodes": 228,
     "iterations": 27955,
     "objective": 4580.490000000001

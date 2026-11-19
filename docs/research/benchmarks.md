@@ -84,13 +84,13 @@ time beside it would measure those, not this.
 
 | Problem | Rows × columns | Nodes | Iterations: warm | Iterations: cold | Warm, ms | Cold, ms | Warm ÷ cold, time |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| knapsack-10x30 | 10 × 30 | 306 | 831 | 1981 | 22.2 | 48.9 | 0.45 |
-| knapsack-15x50 | 15 × 50 | 548 / 550 | 2411 | 5998 | 43.4 | 213 | 0.20 |
-| knapsack-20x60 | 20 × 60 | 1404 | 5463 | 14733 | 157 | 611 | 0.26 |
-| knapsack-30x80 | 30 × 80 | 229 | 948 | 2690 | 33.5 | 132 | 0.25 |
-| facility-10x30 | 40 × 310 | 70 | 584 | 4452 | 12.5 | 79.5 | 0.16 |
-| facility-15x50 | 65 × 765 | 45 | 535 | 4202 | 13.5 | 110 | 0.12 |
-| facility-20x60 | 80 × 1220 | 228 | 3191 | 27955 | 103 | 976 | 0.11 |
+| knapsack-10x30 | 10 × 30 | 306 | 831 | 1981 | 16.4 | 43.9 | 0.37 |
+| knapsack-15x50 | 15 × 50 | 548 / 550 | 2411 | 5998 | 36.2 | 168 | 0.22 |
+| knapsack-20x60 | 20 × 60 | 1404 | 5463 | 14733 | 146 | 645 | 0.23 |
+| knapsack-30x80 | 30 × 80 | 229 | 948 | 2690 | 42.7 | 141 | 0.30 |
+| facility-10x30 | 40 × 310 | 70 | 584 | 4452 | 10.6 | 64.4 | 0.16 |
+| facility-15x50 | 65 × 765 | 45 | 535 | 4202 | 12.6 | 99.5 | 0.13 |
+| facility-20x60 | 80 × 1220 | 228 | 3191 | 27955 | 88.6 | 645 | 0.14 |
 
 Run 2026-11-19: smaltlp 0.14.0 on Node 22.23.5. CPU: Intel(R) Xeon(R) Processor @ 2.10GHz. Both prove the same optimum.
 
@@ -112,3 +112,13 @@ Run 2026-11-19: smaltlp 0.14.0 on Node 22.23.5. CPU: Intel(R) Xeon(R) Processor 
   | facility-10x30 | 22.9 | 12.5 |
   | facility-15x50 | 34.7 | 13.5 |
   | facility-20x60 | 283 | 103 |
+- **The pivot row's nonzeros only** (2026-11-19). Each iteration lists the entries of the pivot row its rows touch, and
+  the ratio test and the reduced costs' update visit those alone, where they had visited all n + m variables; where
+  the touched rows hold n + m entries or more, the row is dense and they visit everything, as before. Its work vectors
+  are made once per solve. The search is the same, iteration for iteration (ties go to the lower column, whatever the
+  order). Measured with `bench/compare.mjs` (both builds in one process, alternating; the median of 25 runs, 9 for the
+  20 × 60 problems), against the build before (commit 9fc3dd5), new ÷ old: knapsacks 0.89, 0.83, 0.76 and 1.01;
+  facility location 0.77, 0.91 and 0.79; the LP problems 0.92, 0.97 and 0.99, so no gain there, where the rows are
+  dense.
+- **Timing on a shared VM:** runs in separate processes moved by ±40% here on problems under 30 ms. Comparing two builds
+  is reliable only in one process, alternating them: `node bench/compare.mjs old/dist new/dist`.
