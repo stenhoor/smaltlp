@@ -1,52 +1,22 @@
-// Times branch-and-bound with and without warm starts on the same integer programs, from the built package (npm run
-// build first): every node from its parent's basis, against every node from the start (with presolve, as before warm
-// starts). Both solve to a gap of 0, so both prove the same optimum. The problems are multi-dimensional knapsacks from
-// a seeded generator: m rows of whole weights 1 to 30, each with half its row's total as capacity, and n binary items
-// worth 1 to 40. The median of 3 runs after a warm-up, on one thread. Writes bench/results/warm.json and the table in
-// docs/research/benchmarks.md between its <!-- bench:warm --> markers.
+// Times branch-and-bound with and without warm starts on the same integer programs (bench/problems.mjs: knapsacks and
+// facility location), from a built package (npm run build first): every node from its parent's basis and
+// factorization, against every node from the start (with presolve, as before warm starts). Both solve to a gap of 0,
+// so both prove the same optimum. The median of 3 runs after a warm-up, on one thread. Writes
+// bench/results/warm.json and the table in docs/research/benchmarks.md between its <!-- bench:warm --> markers.
 //   node bench/warm.mjs
+// SMALTLP_DIST=path/to/dist times another build (an older commit's, say), and only prints its table.
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { cpus } from 'node:os';
+import { resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
+import { pathToFileURL } from 'node:url';
+import { MIPS } from './problems.mjs';
 
-const { branchAndBound } = await import('../dist/mip/branch.js');
-const { fromTriplets } = await import('../dist/core/sparse.js');
-const { VERSION } = await import('../dist/index.js');
-
-/** The sizes: rows (m) by binary columns (n). */
-const SIZES = [
-  { key: 'knapsack-10x30', m: 10, n: 30 },
-  { key: 'knapsack-15x50', m: 15, n: 50 },
-  { key: 'knapsack-20x60', m: 20, n: 60 },
-  { key: 'knapsack-30x80', m: 30, n: 80 },
-];
-
-function rng(seed) {
-  let s = seed >>> 0;
-  return () => (s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 2 ** 32;
-}
-
-/** A multi-dimensional knapsack, as a minimization: max worth·x is min −worth·x. */
-function knapsack(m, n, seed) {
-  const r = rng(seed);
-  const ii = [];
-  const jj = [];
-  const vv = [];
-  const rowUp = new Float64Array(m);
-  for (let i = 0; i < m; i++) {
-    let sum = 0;
-    for (let j = 0; j < n; j++) {
-      const a = 1 + Math.floor(r() * 30);
-      ii.push(i);
-      jj.push(j);
-      vv.push(a);
-      sum += a;
-    }
-    rowUp[i] = Math.floor(sum / 2);
-  }
-  const c = Float64Array.from({ length: n }, () => -(1 + Math.floor(r() * 40)));
-  return { A: fromTriplets(m, n, ii, jj, vv), c, colLo: new Float64Array(n), colUp: new Float64Array(n).fill(1), rowLo: new Float64Array(m).fill(-Infinity), rowUp };
-}
+const other = process.env.SMALTLP_DIST;
+const dist = other ? pathToFileURL(resolve(other)).href : new URL('../dist', import.meta.url).href;
+const { branchAndBound } = await import(`${dist}/mip/branch.js`);
+const { fromTriplets } = await import(`${dist}/core/sparse.js`);
+const { VERSION } = await import(`${dist}/index.js`);
 
 const median = (f, reps) => {
   f();
@@ -60,9 +30,9 @@ const median = (f, reps) => {
 };
 
 const results = {};
-for (const { key, m, n } of SIZES) {
-  const lp = knapsack(m, n, m * 1000 + n);
-  const run = (warmStart) => () => branchAndBound(lp, { integer: new Uint8Array(n).fill(1), relGap: 0, nodeLimit: Infinity, timeLimit: Infinity, presolve: true, tol: 1e-7, maxIter: 2 ** 31 - 1, warmStart });
+for (const { key, rows: m, cols: n, make } of MIPS) {
+  const { lp, integer } = make(fromTriplets);
+  const run = (warmStart) => () => branchAndBound(lp, { integer, relGap: 0, nodeLimit: Infinity, timeLimit: Infinity, presolve: true, tol: 1e-7, maxIter: 2 ** 31 - 1, warmStart });
   const row = { rows: m, cols: n };
   for (const [name, warm] of [['warm', true], ['cold', false]]) {
     const b = run(warm)();
@@ -71,6 +41,10 @@ for (const { key, m, n } of SIZES) {
   }
   if (Math.abs(row.warm.objective - row.cold.objective) > 1e-9 * (1 + Math.abs(row.cold.objective))) throw new Error(`${key}: the objectives differ`);
   results[key] = row;
+}
+if (other) {
+  console.log(JSON.stringify(results, null, 1));
+  process.exit(0);
 }
 const meta = { library: `smaltlp ${VERSION}`, runtime: `Node ${process.versions.node}`, cpu: cpus()[0]?.model ?? 'unknown', date: new Date().toISOString().slice(0, 10) };
 mkdirSync(new URL('./results', import.meta.url).pathname, { recursive: true });

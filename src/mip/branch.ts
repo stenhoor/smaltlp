@@ -15,6 +15,7 @@
  * @module
  */
 import { solve } from '../lp/presolve.ts';
+import type { BasisFactor } from '../core/basis.ts';
 import { dualSimplex, type Lp } from '../lp/simplex.ts';
 
 /** How far an integer column's value may be from a whole number and still count as integral: HiGHS's default. */
@@ -73,6 +74,8 @@ interface Node {
   bound: number;
   /** The parent's optimal basis, to start from; null at the root. */
   basis: Int32Array | null;
+  /** Its factorization, when the parent's solve gave one; the child's solve starts from a copy. */
+  factor: BasisFactor | null;
 }
 
 /** Minimizes cᵀx over lp, with the columns marked integer taking whole values. */
@@ -93,7 +96,7 @@ export function branchAndBound(lp: Lp, opts: BranchOptions): BranchResult {
   let objective = Infinity;
   let nodes = 0;
   let nit = 0;
-  const open: Node[] = [{ colLo, colUp, bound: -Infinity, basis: null }];
+  const open: Node[] = [{ colLo, colUp, bound: -Infinity, basis: null, factor: null }];
   const warm = opts.warmStart ?? true;
   const result = (end: BranchEnd): BranchResult => {
     let dualBound = x ? objective : Infinity;
@@ -125,7 +128,7 @@ export function branchAndBound(lp: Lp, opts: BranchOptions): BranchResult {
     const nodeLp = { ...lp, colLo: node.colLo, colUp: node.colUp };
     const simplex = { maxIter: opts.maxIter, primalTol: opts.tol, dualTol: opts.tol };
     // The root with presolve (if on); below it, the dual simplex from the parent's basis.
-    const res = node.basis && warm ? dualSimplex(nodeLp, { ...simplex, basis: node.basis }) : solve(nodeLp, { ...simplex, presolve: opts.presolve && (nodes === 0 || !warm) });
+    const res = node.basis && warm ? dualSimplex(nodeLp, { ...simplex, basis: node.basis, refactorAtEnd: false, ...(node.factor ? { factor: node.factor } : {}) }) : solve(nodeLp, { ...simplex, presolve: opts.presolve && (nodes === 0 || !warm) });
     nodes++;
     nit += res.nit;
     if (res.status === 2) continue;
@@ -166,9 +169,9 @@ export function branchAndBound(lp: Lp, opts: BranchOptions): BranchResult {
       continue;
     }
     const v = res.x[branch]!;
-    const down: Node = { colLo: node.colLo, colUp: node.colUp.slice(), bound: value, basis: res.basis };
+    const down: Node = { colLo: node.colLo, colUp: node.colUp.slice(), bound: value, basis: res.basis, factor: res.factor };
     down.colUp[branch] = Math.floor(v);
-    const up: Node = { colLo: node.colLo.slice(), colUp: node.colUp, bound: value, basis: res.basis };
+    const up: Node = { colLo: node.colLo.slice(), colUp: node.colUp, bound: value, basis: res.basis, factor: res.factor };
     up.colLo[branch] = Math.ceil(v);
     // The nearer side last, so depth-first search takes it next.
     if (v - Math.floor(v) < 0.5) open.push(up, down);
