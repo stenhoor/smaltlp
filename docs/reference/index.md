@@ -40,6 +40,13 @@ From `@smaltworks/smaltlp/io`:
 - [`problemToModel`](./io/problem-to-model): an `LpProblem` as a model to write.
 - [`mpsToProblem`](./io/mps-to-problem): an `LpProblem` from what `readMps` read.
 
+## Worker
+
+From `@smaltworks/smaltlp/worker`:
+
+- [`startWorker`](./worker/start-worker): smaltlp in a Web Worker, so a long solve doesn't freeze the page.
+- [`connect`, `serve`](./worker/connect): smaltlp over any message port, such as a worker of your own.
+
 ## Errors and differences
 
 - [Errors](./errors): every error code, with what it means and what to do.

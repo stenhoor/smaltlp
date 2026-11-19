@@ -80,7 +80,9 @@ The site (https://stenhoor.github.io/smaltlp/) mirrors smaltml's (the owner, 202
   interface, which `linprog()`'s `integrality` and the model's integer variables use too); `src/model/` is the modelling layer in PuLP 4.2's style (the owner, 2026-11-18: follow 4.2 only:
   `prob.addVariable()`, `constraints()`, `LpSolveStats` and `LpSolveStatus`, in camelCase), solved by the same dual
   simplex; `src/io/` reads and writes model files (`mps.ts`, MPS free and fixed; `lp.ts`, CPLEX LP; `index.ts`,
-  `mpsToProblem()` and `problemToModel()`). Each area with its own `index.ts` is an entry point in `package.json`
+  `mpsToProblem()` and `problemToModel()`); `src/worker/` runs solves in a Web Worker (`index.ts`, `startWorker()` and
+  `connect()`; `runtime.ts`, `serve()`; `worker.ts`, the worker script), as smaltml's does, and the root entry leaves
+  it out. Each area with its own `index.ts` is an entry point in `package.json`
   `exports`.
 - **Compare tests** (ADR 0039, section 6): `compare/run.py` runs every case through scipy's linprog and milp (HiGHS), PuLP
   (with HiGHS) and HiGHS's MPS and LP readers (which also read back what smaltlp's writers write, through `compare/write.ts`),

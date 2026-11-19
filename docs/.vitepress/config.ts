@@ -127,6 +127,14 @@ export default defineConfig({
               { text: 'problemToModel', link: '/reference/io/problem-to-model' },
             ],
           },
+          {
+            text: 'Worker',
+            collapsed: false,
+            items: [
+              { text: 'startWorker', link: '/reference/worker/start-worker' },
+              { text: 'connect, serve', link: '/reference/worker/connect' },
+            ],
+          },
           { text: 'Errors', link: '/reference/errors' },
           { text: 'Where smaltlp differs', link: '/reference/divergences' },
           {
