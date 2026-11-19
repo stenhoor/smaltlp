@@ -159,6 +159,11 @@ for (const file of files) {
         const lines = readFileSync(file, 'utf8').split('\n');
         const printed = ex.table ? lines.slice(ex.table.from, ex.table.to) : [];
         if (UPDATE) {
+          // A table the example no longer gives is a sign its last line stopped being a whole expression (one that
+          // continues an expression, or starts with `)`), not a table to delete: fail, and leave the page as it is.
+          if (printed.length > 0 && table.length === 0) {
+            assert.fail(`${file}:${ex.line}: the example gives no result now, so UPDATE_DOCS would delete its table; end it with a line that is a whole expression (or delete the table yourself)`);
+          }
           const pending = updates.get(file) ?? [];
           pending.push({ at: ex, table });
           updates.set(file, pending);
