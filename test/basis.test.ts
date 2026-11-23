@@ -71,6 +71,20 @@ test('ftran and btran on sparse matrices, with little fill', () => {
   }
 });
 
+test('one factorization reused on matrices of every density: its pools grow, and pack when fill outgrows them', () => {
+  const m = 60;
+  const f = new BasisFactor(m);
+  // The first (density 0.2, seed 21) fills its new pools and packs both partway through.
+  for (const [density, seed] of [[0.2, 21], [0.03, 11], [0.5, 12], [1, 13], [0.05, 14], [0.3, 15]] as const) {
+    const B = sparseMatrix(m, density, seed);
+    assert.ok(f.factor(columnsOf(B, m)));
+    const r = rng(seed + 100);
+    const a = new Float64Array(m).map(() => r());
+    close(matVec(B, m, f.ftran(a.slice())), a, 1e-9);
+    close(matTVec(B, m, f.btran(a.slice())), a, 1e-9);
+  }
+});
+
 test('a slack basis, −I, and a permuted identity factor exactly', () => {
   const m = 6;
   const f = new BasisFactor(m);
