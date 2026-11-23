@@ -2,26 +2,26 @@
  "library": "smaltlp 0.14.0",
  "runtime": "Node 22.23.5",
  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
- "date": "2026-11-19",
+ "date": "2026-11-23",
  "results": {
   "lp-50x75": {
    "rows": 50,
    "cols": 75,
-   "milliseconds": 2.2750529999999998,
+   "milliseconds": 1.9063000000000017,
    "iterations": 23,
    "objective": -1504.079960685977
   },
   "lp-150x225": {
    "rows": 150,
    "cols": 225,
-   "milliseconds": 5.483264999999989,
+   "milliseconds": 4.165548000000001,
    "iterations": 55,
    "objective": -4652.14388802732
   },
   "lp-300x450": {
    "rows": 300,
    "cols": 450,
-   "milliseconds": 14.861976000000027,
+   "milliseconds": 12.537954999999982,
    "iterations": 93,
    "objective": -10004.171837948876
   }
