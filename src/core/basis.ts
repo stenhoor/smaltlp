@@ -50,6 +50,8 @@ export class BasisFactor {
   /** Work space for ftran and btran, kept between calls. */
   private readonly work: Float64Array;
   private readonly work2: Float64Array;
+  /** Work space for factor, made at its first call and kept. */
+  private space: Space | null = null;
 
   constructor(m: number) {
     this.m = m;
@@ -86,7 +88,7 @@ export class BasisFactor {
 
   /** The number of entries in L and U: a measure of fill-in. */
   get entries(): number {
-    return this.Lrow.length + this.Ucol.length + this.m;
+    return this.Lstart[this.Lstart.length - 1]! + this.Ustart[this.Ustart.length - 1]! + this.m;
   }
 
   /**
@@ -99,27 +101,42 @@ export class BasisFactor {
     this.etaPivot = [];
     this.etaIndex = [];
     this.etaValue = [];
+    const work = (this.space ??= newSpace(m));
+    const { rLen, cLen, rPos, rCap, cPos, cCap, cHead, cNext, cPrev, rHead, rNext, rPrev, inP, atP, seen, pCol, pVal } = work;
     // The active submatrix, by rows (columns and values, in the order they arrived) and by columns (the rows with an
-    // entry). Each row and column is its own typed array, grown by doubling; lengths are kept apart.
-    const rLen = new Int32Array(m);
-    const cLen = new Int32Array(m);
+    // entry), each a stretch of one shared pool: row i is rIdx/rV[rPos[i] … rPos[i] + rLen[i]), with room for rCap[i].
+    // A row or column that outgrows its room moves to the pool's end; a full pool is copied, packed, into a bigger one.
+    // The pools are kept between factorizations.
+    rLen.fill(0);
+    cLen.fill(0);
     for (let j = 0; j < m; j++) {
       const c = columns[j]!;
-      for (let k = 0; k < c.index.length; k++) if (c.value[k] !== 0) rLen[c.index[k]!]!++;
-      cLen[j] = c.index.length;
+      for (let k = 0; k < c.index.length; k++) {
+        if (c.value[k] === 0) continue;
+        rLen[c.index[k]!]!++;
+        cLen[j]!++;
+      }
     }
-    const rCol: Int32Array[] = new Array(m);
-    const rVal: Float64Array[] = new Array(m);
-    const cRow: Int32Array[] = new Array(m);
+    let rEnd = 0;
+    let cEnd = 0;
     for (let i = 0; i < m; i++) {
-      rCol[i] = new Int32Array(2 * rLen[i]! + 4);
-      rVal[i] = new Float64Array(2 * rLen[i]! + 4);
+      rPos[i] = rEnd;
+      rCap[i] = 2 * rLen[i]! + 4;
+      rEnd += rCap[i]!;
       rLen[i] = 0;
     }
     for (let j = 0; j < m; j++) {
-      cRow[j] = new Int32Array(2 * cLen[j]! + 4);
+      cPos[j] = cEnd;
+      cCap[j] = 2 * cLen[j]! + 4;
+      cEnd += cCap[j]!;
       cLen[j] = 0;
     }
+    if (work.rIdx.length < rEnd + (rEnd >> 1)) {
+      work.rIdx = new Int32Array(2 * rEnd);
+      work.rV = new Float64Array(2 * rEnd);
+    }
+    if (work.cIdx.length < cEnd + (cEnd >> 1)) work.cIdx = new Int32Array(2 * cEnd);
+    let { rIdx, rV, cIdx } = work;
     for (let j = 0; j < m; j++) {
       const c = columns[j]!;
       for (let k = 0; k < c.index.length; k++) {
@@ -127,54 +144,112 @@ export class BasisFactor {
         if (v === 0) continue;
         const i = c.index[k]!;
         const n = rLen[i]!;
+        const at = rPos[i]! + n;
         // A repeated row in one column adds to its entry, which is row i's last.
-        if (n > 0 && rCol[i]![n - 1] === j) {
-          rVal[i]![n - 1]! += v;
+        if (n > 0 && rIdx[at - 1] === j) {
+          rV[at - 1]! += v;
           continue;
         }
-        rCol[i]![n] = j;
-        rVal[i]![n] = v;
+        rIdx[at] = j;
+        rV[at] = v;
         rLen[i] = n + 1;
-        cRow[j]![cLen[j]!] = i;
+        cIdx[cPos[j]! + cLen[j]!] = i;
         cLen[j]!++;
       }
     }
-    /** a_ij, or 0. */
-    const get = (i: number, j: number): number => {
-      const cs = rCol[i]!;
-      for (let t = 0, n = rLen[i]!; t < n; t++) if (cs[t] === j) return rVal[i]![t]!;
-      return 0;
+
+    /** Gives row i room for `need` entries, at the pool's end. */
+    const growRow = (i: number, need: number): void => {
+      const cap = Math.max(2 * rCap[i]!, need) + 4;
+      if (rEnd + cap > rIdx.length) {
+        let total = cap;
+        for (let r = 0; r < m; r++) total += rLen[r]! + 4;
+        const gi = new Int32Array(Math.max(2 * rIdx.length, 2 * total));
+        const gv = new Float64Array(gi.length);
+        let at = 0;
+        for (let r = 0; r < m; r++) {
+          gi.set(rIdx.subarray(rPos[r]!, rPos[r]! + rLen[r]!), at);
+          gv.set(rV.subarray(rPos[r]!, rPos[r]! + rLen[r]!), at);
+          rPos[r] = at;
+          rCap[r] = rLen[r]! + 4;
+          at += rCap[r]!;
+        }
+        work.rIdx = rIdx = gi;
+        work.rV = rV = gv;
+        rEnd = at;
+      }
+      rIdx.copyWithin(rEnd, rPos[i]!, rPos[i]! + rLen[i]!);
+      rV.copyWithin(rEnd, rPos[i]!, rPos[i]! + rLen[i]!);
+      rPos[i] = rEnd;
+      rCap[i] = cap;
+      rEnd += cap;
     };
     const colAppend = (j: number, i: number): void => {
-      let rs = cRow[j]!;
       const n = cLen[j]!;
-      if (n === rs.length) {
-        const grown = new Int32Array(2 * n + 4);
-        grown.set(rs);
-        cRow[j] = rs = grown;
+      if (n === cCap[j]) {
+        const cap = 2 * n + 4;
+        if (cEnd + cap > cIdx.length) {
+          let total = cap;
+          for (let c = 0; c < m; c++) total += cLen[c]! + 4;
+          const gi = new Int32Array(Math.max(2 * cIdx.length, 2 * total));
+          let at = 0;
+          for (let c = 0; c < m; c++) {
+            gi.set(cIdx.subarray(cPos[c]!, cPos[c]! + cLen[c]!), at);
+            cPos[c] = at;
+            cCap[c] = cLen[c]! + 4;
+            at += cCap[c]!;
+          }
+          work.cIdx = cIdx = gi;
+          cEnd = at;
+        }
+        cIdx.copyWithin(cEnd, cPos[j]!, cPos[j]! + n);
+        cPos[j] = cEnd;
+        cCap[j] = cap;
+        cEnd += cap;
       }
-      rs[n] = i;
+      cIdx[cPos[j]! + n] = i;
       cLen[j] = n + 1;
+      unlink(cHead, cNext, cPrev, j, n);
+      link(cHead, cNext, cPrev, j, n + 1);
     };
     /** Takes row i out of column j's list, keeping the others' order. */
     const colRemove = (j: number, i: number): void => {
-      const rs = cRow[j]!;
+      const base = cPos[j]!;
       const n = cLen[j]!;
       let t = 0;
-      while (t < n && rs[t] !== i) t++;
+      while (t < n && cIdx[base + t] !== i) t++;
       if (t === n) return;
-      rs.copyWithin(t, t + 1, n);
+      cIdx.copyWithin(base + t, base + t + 1, base + n);
       cLen[j] = n - 1;
+      unlink(cHead, cNext, cPrev, j, n);
+      link(cHead, cNext, cPrev, j, n - 1);
+    };
+    /** a_ij, or 0. */
+    const get = (i: number, j: number): number => {
+      const base = rPos[i]!;
+      for (let t = base, e = base + rLen[i]!; t < e; t++) if (rIdx[t] === j) return rV[t]!;
+      return 0;
     };
     const colMax = (j: number): number => {
       let big = 0;
-      const rs = cRow[j]!;
-      for (let t = 0, n = cLen[j]!; t < n; t++) big = Math.max(big, Math.abs(get(rs[t]!, j)));
+      const base = cPos[j]!;
+      for (let t = base, e = base + cLen[j]!; t < e; t++) big = Math.max(big, Math.abs(get(cIdx[t]!, j)));
       return big;
     };
 
-    const rowDone = new Uint8Array(m);
-    const colDone = new Uint8Array(m);
+    // The active columns and rows, each in a doubly linked list by its count of entries, so the pivot search finds the
+    // shortest without scanning them all. When a count changes, the list follows (it moves to the front of its new one).
+    // In index order to start with: each list is built from the highest index down.
+    cHead.fill(-1);
+    rHead.fill(-1);
+    for (let j = m - 1; j >= 0; j--) link(cHead, cNext, cPrev, j, cLen[j]!);
+    for (let i = m - 1; i >= 0; i--) link(rHead, rNext, rPrev, i, rLen[i]!);
+    // Row p's entries, scattered by column for step k: where in row p column j is, when inP[j] is k.
+    inP.fill(-1);
+    // The columns a row being updated already has, marked with that row's own number.
+    seen.fill(-1);
+    let rowMark = 0;
+
     const pivotRow = new Int32Array(m);
     const pivotCol = new Int32Array(m);
     const Lstart = new Int32Array(m + 1);
@@ -186,19 +261,12 @@ export class BasisFactor {
     let Ucol = new Int32Array(2 * m + 4);
     let Uval = new Float64Array(2 * m + 4);
     let nU = 0;
-    // Row p's entries, scattered by column for the step: where in row p column j is, when inP[j] is the step's mark.
-    const inP = new Int32Array(m).fill(-1);
-    const atP = new Int32Array(m);
-    // The columns a row being updated already has, marked with that row's own number.
-    const seen = new Int32Array(m).fill(-1);
-    let rowMark = 0;
-    const shortCols = new Int32Array(SEARCH);
-    const shortRows = new Int32Array(SEARCH);
+    const { shortCols, shortRows } = work;
 
     for (let k = 0; k < m; k++) {
       // The SEARCH shortest active columns and rows.
-      const nc = shortest(m, colDone, cLen, shortCols);
-      const nr = shortest(m, rowDone, rLen, shortRows);
+      const nc = shortest(m, cHead, cNext, shortCols);
+      const nr = shortest(m, rHead, rNext, shortRows);
       if (nc === 0 || cLen[shortCols[0]!] === 0) return false;
       let p = -1;
       let q = -1;
@@ -218,85 +286,89 @@ export class BasisFactor {
         const j = shortCols[s]!;
         const cmax = colMax(j);
         if (cmax < SINGULAR) return false;
-        const rs = cRow[j]!;
-        for (let t = 0, n = cLen[j]!; t < n; t++) consider(rs[t]!, j, get(rs[t]!, j), cmax);
+        const base = cPos[j]!;
+        for (let t = base, e = base + cLen[j]!; t < e; t++) consider(cIdx[t]!, j, get(cIdx[t]!, j), cmax);
         if (best === 0) break;
       }
       if (best !== 0) {
         for (let s = 0; s < nr; s++) {
           const i = shortRows[s]!;
-          const cs = rCol[i]!;
-          const vs = rVal[i]!;
-          for (let t = 0, n = rLen[i]!; t < n; t++) consider(i, cs[t]!, vs[t]!, colMax(cs[t]!));
+          const base = rPos[i]!;
+          for (let t = base, e = base + rLen[i]!; t < e; t++) consider(i, rIdx[t]!, rV[t]!, colMax(rIdx[t]!));
           if (best === 0) break;
         }
       }
       if (p < 0) return false;
 
-      // Eliminate: every other active row with an entry in column q loses l × row p.
-      const pCol = rCol[p]!;
-      const pVal = rVal[p]!;
+      // Row p, copied out (other rows' growth can move it in the pool), and scattered by column.
       const pLen = rLen[p]!;
-      for (let t = 0; t < pLen; t++) {
-        inP[pCol[t]!] = k;
-        atP[pCol[t]!] = t;
+      for (let t = 0, base = rPos[p]!; t < pLen; t++) {
+        const j = rIdx[base + t]!;
+        pCol[t] = j;
+        pVal[t] = rV[base + t]!;
+        inP[j] = k;
+        atP[j] = t;
       }
       const d = pVal[atP[q]!]!;
       pivotRow[k] = p;
       pivotCol[k] = q;
       Upivot[k] = d;
-      const qRows = cRow[q]!;
+      // Eliminate: every other active row with an entry in column q loses l × row p.
       for (let s = 0, nq = cLen[q]!; s < nq; s++) {
-        const i = qRows[s]!;
+        const i = cIdx[cPos[q]! + s]!;
         if (i === p) continue;
         const mark = rowMark++;
-        let cs = rCol[i]!;
-        let vs = rVal[i]!;
-        let n = rLen[i]!;
-        // Row i's own entries, in place: column q goes, those row p shares change, and any that reach 0 go.
+        let base = rPos[i]!;
+        const before = rLen[i]!;
+        let n = before;
         let l = 0;
-        let w = 0;
-        for (let t = 0; t < n; t++) {
-          if (cs[t] === q) {
-            l = vs[t]! / d;
+        for (let t = base; t < base + n; t++) {
+          if (rIdx[t] === q) {
+            l = rV[t]! / d;
             break;
           }
         }
-        for (let t = 0; t < n; t++) {
-          const j = cs[t]!;
-          let v = vs[t]!;
+        // Row i's own entries, in place: column q goes, those row p shares change, and any that reach 0 go.
+        let w = base;
+        let shared = 0;
+        for (let t = base; t < base + n; t++) {
+          const j = rIdx[t]!;
+          let v = rV[t]!;
           if (j === q) continue;
           if (inP[j] === k) {
             seen[j] = mark;
+            shared++;
             v -= l * pVal[atP[j]!]!;
             if (v === 0) {
               colRemove(j, i);
               continue;
             }
           }
-          cs[w] = j;
-          vs[w] = v;
+          rIdx[w] = j;
+          rV[w] = v;
           w++;
         }
-        n = w;
+        n = w - base;
         // Fill-in: row p's other columns that row i lacks, in row p's order.
+        const fill = pLen - 1 - shared;
+        if (n + fill > rCap[i]!) {
+          rLen[i] = n;
+          growRow(i, n + fill);
+          base = rPos[i]!;
+        }
         for (let t = 0; t < pLen; t++) {
           const j = pCol[t]!;
           if (j === q || seen[j] === mark) continue;
           const v = 0 - l * pVal[t]!;
           if (v === 0) continue;
-          if (n === cs.length) {
-            const gc = new Int32Array(2 * n + 4);
-            const gv = new Float64Array(2 * n + 4);
-            gc.set(cs);
-            gv.set(vs);
-            rCol[i] = cs = gc;
-            rVal[i] = vs = gv;
-          }
-          cs[n] = j;
-          vs[n] = v;
+          rIdx[base + n] = j;
+          rV[base + n] = v;
           n++;
           colAppend(j, i);
+        }
+        if (n !== before) {
+          unlink(rHead, rNext, rPrev, i, before);
+          link(rHead, rNext, rPrev, i, n);
         }
         rLen[i] = n;
         if (nL === Lrow.length) {
@@ -331,20 +403,21 @@ export class BasisFactor {
         nU++;
       }
       Ustart[k + 1] = nU;
+      unlink(cHead, cNext, cPrev, q, cLen[q]!);
+      unlink(rHead, rNext, rPrev, p, rLen[p]!);
       cLen[q] = 0;
-      rowDone[p] = 1;
-      colDone[q] = 1;
     }
 
+    // L and U are new arrays each time, a little longer than they need be: clones share them.
     this.pivotRow = pivotRow;
     this.pivotCol = pivotCol;
     this.Lstart = Lstart;
-    this.Lrow = Lrow.slice(0, nL);
-    this.Lval = Lval.slice(0, nL);
+    this.Lrow = Lrow;
+    this.Lval = Lval;
     this.Upivot = Upivot;
     this.Ustart = Ustart;
-    this.Ucol = Ucol.slice(0, nU);
-    this.Uval = Uval.slice(0, nU);
+    this.Ucol = Ucol;
+    this.Uval = Uval;
     return true;
   }
 
@@ -430,20 +503,67 @@ export class BasisFactor {
   }
 }
 
-/** Up to SEARCH not-done indices with the smallest sizes, smallest first (ties in index order), into `out`; returns how many. */
-function shortest(m: number, done: Uint8Array, size: Int32Array, out: Int32Array): number {
+/** factor's work space: arrays of length m, and the pools, which grow. */
+interface Space {
+  rLen: Int32Array;
+  cLen: Int32Array;
+  rPos: Int32Array;
+  rCap: Int32Array;
+  cPos: Int32Array;
+  cCap: Int32Array;
+  cHead: Int32Array;
+  cNext: Int32Array;
+  cPrev: Int32Array;
+  rHead: Int32Array;
+  rNext: Int32Array;
+  rPrev: Int32Array;
+  inP: Int32Array;
+  atP: Int32Array;
+  seen: Int32Array;
+  pCol: Int32Array;
+  pVal: Float64Array;
+  shortCols: Int32Array;
+  shortRows: Int32Array;
+  rIdx: Int32Array;
+  rV: Float64Array;
+  cIdx: Int32Array;
+}
+
+function newSpace(m: number): Space {
+  const ints = () => new Int32Array(m);
+  return {
+    rLen: ints(), cLen: ints(), rPos: ints(), rCap: ints(), cPos: ints(), cCap: ints(),
+    cHead: new Int32Array(m + 1), cNext: ints(), cPrev: ints(),
+    rHead: new Int32Array(m + 1), rNext: ints(), rPrev: ints(),
+    inP: ints(), atP: ints(), seen: ints(), pCol: ints(), pVal: new Float64Array(m),
+    shortCols: new Int32Array(SEARCH), shortRows: new Int32Array(SEARCH),
+    rIdx: new Int32Array(0), rV: new Float64Array(0), cIdx: new Int32Array(0),
+  };
+}
+
+/** Puts x at the front of the list for `count`. */
+function link(head: Int32Array, next: Int32Array, prev: Int32Array, x: number, count: number): void {
+  const h = head[count]!;
+  next[x] = h;
+  prev[x] = -1;
+  if (h >= 0) prev[h] = x;
+  head[count] = x;
+}
+
+/** Takes x out of the list for `count`. */
+function unlink(head: Int32Array, next: Int32Array, prev: Int32Array, x: number, count: number): void {
+  const a = prev[x]!;
+  const b = next[x]!;
+  if (a >= 0) next[a] = b;
+  else head[count] = b;
+  if (b >= 0) prev[b] = a;
+}
+
+/** Up to SEARCH active indices with the fewest entries, fewest first, from the lists by count, into `out`; returns how many. */
+function shortest(m: number, head: Int32Array, next: Int32Array, out: Int32Array): number {
   let count = 0;
-  for (let i = 0; i < m; i++) {
-    if (done[i]) continue;
-    const s = size[i]!;
-    if (count < SEARCH || s < size[out[count - 1]!]!) {
-      let at = count;
-      while (at > 0 && size[out[at - 1]!]! > s) at--;
-      const last = count < SEARCH ? count : SEARCH - 1;
-      out.copyWithin(at + 1, at, last);
-      out[at] = i;
-      if (count < SEARCH) count++;
-    }
+  for (let c = 0; c <= m && count < SEARCH; c++) {
+    for (let x = head[c]!; x >= 0 && count < SEARCH; x = next[x]!) out[count++] = x;
   }
   return count;
 }

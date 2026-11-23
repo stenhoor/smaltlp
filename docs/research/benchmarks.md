@@ -133,5 +133,14 @@ Run 2026-11-19: smaltlp 0.14.0 on Node 22.23.5. CPU: Intel(R) Xeon(R) Processor 
   against the build before (commit 0f935c9), three runs, new ÷ old: the LP problems 0.84 to 0.87, 0.89 to 0.91 and
   0.86 to 0.87. The integer programs refactor rarely, and moved both ways between runs (0.41 to 2.36 on the same
   problem), with no change that rises above the noise.
+- **The LU's pivot search by lists, and its storage reused** (2026-11-23). A solve factors two or three times (the
+  first basis, every 64 changes of basis, and once more at the end), so the cost was each factorization, not how many:
+  factoring lp-300x450's first basis, the identity, took 366 µs. Each step scanned every active row and column for the
+  shortest; they are now kept in lists by their count of entries. And the rows and columns, which were two small typed
+  arrays apiece each time, now share two pools kept between factorizations. Factoring alone, on lp-300x450's three
+  bases: 366, 834 and 815 µs before; 32, 213 and 212 µs after. The new lists can break a tie between pivots another
+  way: the LP problems' answers are the same to the last bit, and two knapsacks take one iteration fewer, with the same
+  solutions and nodes. With `bench/compare.mjs` against the build before (commit c1a387c), three runs, new ÷ old: the
+  LP problems 0.78 to 0.84, 0.85 to 0.86 and 0.74 to 0.91; the integer programs within the noise, as before.
 - **Timing on a shared VM:** runs in separate processes moved by ±40% here on problems under 30 ms. Comparing two builds
   is reliable only in one process, alternating them: `node bench/compare.mjs old/dist new/dist`.
