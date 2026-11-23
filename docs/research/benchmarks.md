@@ -126,5 +126,12 @@ Run 2026-11-19: smaltlp 0.14.0 on Node 22.23.5. CPU: Intel(R) Xeon(R) Processor 
   solves the problem as it is, without copying it. With `bench/compare.mjs` against the build before (commit c75f13c),
   new ÷ old: the LP problems 0.73, 0.78 and 0.79, with the same iterations. The integer programs take a node or a few
   iterations more or fewer, since the root's factorization now carries to its children (0.77 to 1.04).
+- **The LU's working storage in typed arrays** (2026-11-23). The factorization kept the active submatrix's rows as
+  `Map`s and its columns as `Set`s; it now keeps each as a typed array, with row p's entries scattered by column for
+  each elimination step. It picks the same pivots in the same order, so every answer is the same to the last bit (the
+  benchmark problems' `x`, `fun`, duals and node counts, checked against the build before). With `bench/compare.mjs`
+  against the build before (commit 0f935c9), three runs, new ÷ old: the LP problems 0.84 to 0.87, 0.89 to 0.91 and
+  0.86 to 0.87. The integer programs refactor rarely, and moved both ways between runs (0.41 to 2.36 on the same
+  problem), with no change that rises above the noise.
 - **Timing on a shared VM:** runs in separate processes moved by ±40% here on problems under 30 ms. Comparing two builds
   is reliable only in one process, alternating them: `node bench/compare.mjs old/dist new/dist`.
