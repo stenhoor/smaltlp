@@ -95,45 +95,43 @@ export function stackCsc(parts: readonly { a: MatrixInput; name: string }[], col
 
 /** A CSC matrix from triplets; entries at the same position are added, and sums of exactly 0 dropped. */
 export function fromTriplets(rows: number, cols: number, ii: ArrayLike<number>, jj: ArrayLike<number>, vv: ArrayLike<number>): Csc {
+  const nnz = jj.length;
+  // Bucket by row first (input order kept within a row), then by column reading the rows in order: each column comes
+  // out sorted by row, with no sort, and repeats sit side by side, in input order.
+  const rowStart = new Int32Array(rows + 1);
+  for (let k = 0; k < nnz; k++) rowStart[ii[k]! + 1]!++;
+  for (let r = 0; r < rows; r++) rowStart[r + 1]! += rowStart[r]!;
+  const rowNext = rowStart.slice(0, rows);
+  const byRow = new Int32Array(nnz);
+  for (let k = 0; k < nnz; k++) byRow[rowNext[ii[k]!]!++] = k;
   const count = new Int32Array(cols + 1);
-  for (let k = 0; k < jj.length; k++) count[jj[k]! + 1]!++;
+  for (let k = 0; k < nnz; k++) count[jj[k]! + 1]!++;
   for (let j = 0; j < cols; j++) count[j + 1]! += count[j]!;
   const next = count.slice(0, cols);
-  const index = new Int32Array(jj.length);
-  const value = new Float64Array(jj.length);
-  for (let k = 0; k < jj.length; k++) {
+  const index = new Int32Array(nnz);
+  const value = new Float64Array(nnz);
+  for (let t = 0; t < nnz; t++) {
+    const k = byRow[t]!;
     const p = next[jj[k]!]!++;
     index[p] = ii[k]!;
     value[p] = vv[k]!;
   }
-  // Sort each column by row and merge repeats.
+  // Merge repeats (summed in input order) and drop entries that summed to exactly 0.
   const start = new Int32Array(cols + 1);
   let w = 0;
   for (let j = 0; j < cols; j++) {
-    const from = count[j]!;
-    const to = count[j + 1]!;
-    const order = Array.from({ length: to - from }, (_, k) => from + k).sort((a, b) => index[a]! - index[b]!);
-    const rowsJ = order.map((p) => index[p]!);
-    const valsJ = order.map((p) => value[p]!);
     start[j] = w;
-    for (let k = 0; k < rowsJ.length; k++) {
-      if (w > start[j]! && index[w - 1] === rowsJ[k]) value[w - 1]! += valsJ[k]!;
-      else {
-        index[w] = rowsJ[k]!;
-        value[w] = valsJ[k]!;
+    const to = count[j + 1]!;
+    for (let p = count[j]!; p < to; ) {
+      const r = index[p]!;
+      let v = value[p]!;
+      for (p++; p < to && index[p] === r; p++) v += value[p]!;
+      if (v !== 0) {
+        index[w] = r;
+        value[w] = v;
         w++;
       }
     }
-    // Drop entries that summed to exactly 0.
-    let keep = start[j]!;
-    for (let p = start[j]!; p < w; p++) {
-      if (value[p] !== 0) {
-        index[keep] = index[p]!;
-        value[keep] = value[p]!;
-        keep++;
-      }
-    }
-    w = keep;
   }
   start[cols] = w;
   return { rows, cols, start, index: index.slice(0, w), value: value.slice(0, w) };

@@ -2,40 +2,40 @@
  "library": "HiGHS 1.16.0 (highspy)",
  "runtime": "Python 3.13.18",
  "cpu": "x86_64",
- "date": "2026-11-19",
+ "date": "2026-11-23",
  "results": {
   "lp-50x75": {
    "HiGHS, defaults": {
-    "milliseconds": 0.9650000000647196,
+    "milliseconds": 0.700436000002469,
     "iterations": 29,
     "objective": -1504.0799606859773
    },
    "HiGHS, serial dual simplex, no presolve": {
-    "milliseconds": 0.22832499996638944,
+    "milliseconds": 0.2523569999937081,
     "iterations": 28,
     "objective": -1504.0799606859773
    }
   },
   "lp-150x225": {
    "HiGHS, defaults": {
-    "milliseconds": 3.9005099999940285,
+    "milliseconds": 2.9778990000011163,
     "iterations": 73,
     "objective": -4652.14388802732
    },
    "HiGHS, serial dual simplex, no presolve": {
-    "milliseconds": 2.051547000064602,
+    "milliseconds": 1.5048389999918754,
     "iterations": 73,
     "objective": -4652.143888027321
    }
   },
   "lp-300x450": {
    "HiGHS, defaults": {
-    "milliseconds": 6.7140310000013415,
+    "milliseconds": 6.955074000003947,
     "iterations": 77,
     "objective": -10004.17183794888
    },
    "HiGHS, serial dual simplex, no presolve": {
-    "milliseconds": 2.7058089999627555,
+    "milliseconds": 2.906230000007781,
     "iterations": 77,
     "objective": -10004.17183794888
    }

@@ -91,6 +91,10 @@ function presolveAndSolve(lp: Lp, opts: SimplexOptions): SimplexResult {
     }
   }
 
+  // Nothing removed: bounds and ranges change only when a row or column goes, so the reduced problem is the original.
+  // Solve it as it is, without copying it (and the result keeps its factorization, in the original's numbering).
+  if (!rowGone.includes(1) && !colGone.includes(1)) return dualSimplex(lp, opts);
+
   // The reduced problem.
   const keepRows: number[] = [];
   const keepCols: number[] = [];

@@ -34,11 +34,11 @@ so one can be set. No speed claim about smaltlp stands without a benchmark here 
 
 | Problem | Rows × columns | smaltlp, ms | HiGHS, defaults, ms | HiGHS, serial dual simplex, no presolve, ms | smaltlp ÷ HiGHS, defaults | smaltlp ÷ HiGHS, serial dual simplex, no presolve | Iterations: smaltlp | Iterations: HiGHS, defaults | Iterations: HiGHS, serial dual simplex, no presolve |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| lp-50x75 | 50 × 75 | 2.28 | 0.97 | 0.23 | 2.4× | 10.0× | 23 | 29 | 28 |
-| lp-150x225 | 150 × 225 | 5.48 | 3.90 | 2.05 | 1.4× | 2.7× | 55 | 73 | 73 |
-| lp-300x450 | 300 × 450 | 14.9 | 6.71 | 2.71 | 2.2× | 5.5× | 93 | 77 | 77 |
+| lp-50x75 | 50 × 75 | 1.91 | 0.70 | 0.25 | 2.7× | 7.6× | 23 | 29 | 28 |
+| lp-150x225 | 150 × 225 | 4.17 | 2.98 | 1.50 | 1.4× | 2.8× | 55 | 73 | 73 |
+| lp-300x450 | 300 × 450 | 12.5 | 6.96 | 2.91 | 1.8× | 4.3× | 93 | 77 | 77 |
 
-Run 2026-11-19: smaltlp 0.14.0 on Node 22.23.5; HiGHS 1.16.0 (highspy) on Python 3.13.18. CPU: Intel(R) Xeon(R) Processor @ 2.10GHz. Every objective agrees within 1e-7, relative.
+Run 2026-11-23: smaltlp 0.14.0 on Node 22.23.5; HiGHS 1.16.0 (highspy) on Python 3.13.18. CPU: Intel(R) Xeon(R) Processor @ 2.10GHz. Every objective agrees within 1e-7, relative.
 
 <!-- /bench:results -->
 
@@ -120,5 +120,11 @@ Run 2026-11-19: smaltlp 0.14.0 on Node 22.23.5. CPU: Intel(R) Xeon(R) Processor 
   20 × 60 problems), against the build before (commit 9fc3dd5), new ÷ old: knapsacks 0.89, 0.83, 0.76 and 1.01;
   facility location 0.77, 0.91 and 0.79; the LP problems 0.92, 0.97 and 0.99, so no gain there, where the rows are
   dense.
+- **Less copying around the LP** (2026-11-23). `fromTriplets`, which turns entries into a sparse matrix (`linprog`'s
+  input, presolve's reduced problem), bucketed each column and sorted it with a comparator; it now buckets by row,
+  then by column, so each column comes out in row order with no sort and no garbage. And presolve that removes nothing
+  solves the problem as it is, without copying it. With `bench/compare.mjs` against the build before (commit c75f13c),
+  new ÷ old: the LP problems 0.73, 0.78 and 0.79, with the same iterations. The integer programs take a node or a few
+  iterations more or fewer, since the root's factorization now carries to its children (0.77 to 1.04).
 - **Timing on a shared VM:** runs in separate processes moved by ±40% here on problems under 30 ms. Comparing two builds
   is reliable only in one process, alternating them: `node bench/compare.mjs old/dist new/dist`.
