@@ -144,3 +144,32 @@ Run 2026-11-19: smaltlp 0.14.0 on Node 22.23.5. CPU: Intel(R) Xeon(R) Processor 
   LP problems 0.78 to 0.84, 0.85 to 0.86 and 0.74 to 0.91; the integer programs within the noise, as before.
 - **Timing on a shared VM:** runs in separate processes moved by ±40% here on problems under 30 ms. Comparing two builds
   is reliable only in one process, alternating them: `node bench/compare.mjs old/dist new/dist`.
+
+## Branch-and-bound: harder problems
+
+The problems above solve in a few hundred nodes, each a handful of simplex iterations, so they show what a node costs
+but not how well the search chooses where to go. These take thousands to tens of thousands of nodes, which is where a
+branching rule, cuts or heuristics show.
+
+- **Problems,** from the same generators (`bench/problems.mjs`, `HARD_MIPS`): knapsacks of 10 rows and 100, 150 and
+  200 items, and of 20 rows and 200; facility location with 30 facilities and 80 customers, and 40 and 100.
+- **The search:** branch-and-bound with its default options, to a gap of 0, from one build.
+- **Timing:** one run of each, in one process. The larger take tens of seconds, so their times move little from run to
+  run; the smaller move more.
+- **Rerun:** `npm run bench:hard` (about two minutes), which writes the table below. `SMALTLP_DIST=path/to/dist node
+  bench/hard.mjs` times another build and prints its results.
+
+<!-- bench:hard -->
+
+| Problem | Rows × columns | Nodes | Iterations | Seconds |
+| --- | --- | ---: | ---: | ---: |
+| knapsack-10x100 | 10 × 100 | 5,425 | 22,967 | 0.8 |
+| knapsack-10x150 | 10 × 150 | 16,035 | 68,058 | 3.4 |
+| knapsack-20x200 | 20 × 200 | 41,649 | 226,183 | 37.7 |
+| knapsack-10x200 | 10 × 200 | 58,583 | 286,130 | 43.9 |
+| facility-30x80 | 110 × 2430 | 974 | 10,876 | 0.9 |
+| facility-40x100 | 140 × 4040 | 3,120 | 37,522 | 2.7 |
+
+Run 2026-11-24: smaltlp 0.14.0 on Node 22.23.5. CPU: Intel(R) Xeon(R) Processor @ 2.10GHz. One run of each.
+
+<!-- /bench:hard -->

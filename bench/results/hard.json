@@ -1,0 +1,56 @@
+{
+ "library": "smaltlp 0.14.0",
+ "runtime": "Node 22.23.5",
+ "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+ "date": "2026-11-24",
+ "results": {
+  "knapsack-10x100": {
+   "rows": 10,
+   "cols": 100,
+   "milliseconds": 819.174243,
+   "nodes": 5425,
+   "iterations": 22967,
+   "objective": -1493
+  },
+  "knapsack-10x150": {
+   "rows": 10,
+   "cols": 150,
+   "milliseconds": 3391.1114509999998,
+   "nodes": 16035,
+   "iterations": 68058,
+   "objective": -2256
+  },
+  "knapsack-20x200": {
+   "rows": 20,
+   "cols": 200,
+   "milliseconds": 37742.899735,
+   "nodes": 41649,
+   "iterations": 226183,
+   "objective": -2952
+  },
+  "knapsack-10x200": {
+   "rows": 10,
+   "cols": 200,
+   "milliseconds": 43925.268086000004,
+   "nodes": 58583,
+   "iterations": 286130,
+   "objective": -3127
+  },
+  "facility-30x80": {
+   "rows": 110,
+   "cols": 2430,
+   "milliseconds": 889.7090339999995,
+   "nodes": 974,
+   "iterations": 10876,
+   "objective": 5527.499999999997
+  },
+  "facility-40x100": {
+   "rows": 140,
+   "cols": 4040,
+   "milliseconds": 2695.8260779999982,
+   "nodes": 3120,
+   "iterations": 37522,
+   "objective": 5726.8099999999995
+  }
+ }
+}

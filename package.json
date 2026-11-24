@@ -34,7 +34,8 @@
     "bench": "npm run build && node bench/smaltlp.mjs",
     "bench:python": "python3 bench/reference.py",
     "bench:report": "node bench/report.mjs",
-    "bench:warm": "npm run build && node bench/warm.mjs"
+    "bench:warm": "npm run build && node bench/warm.mjs",
+    "bench:hard": "npm run build && node bench/hard.mjs"
   },
   "exports": {
     ".": {
