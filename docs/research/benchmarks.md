@@ -84,20 +84,22 @@ time beside it would measure those, not this.
 
 | Problem | Rows × columns | Nodes | Iterations: warm | Iterations: cold | Warm, ms | Cold, ms | Warm ÷ cold, time |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| knapsack-10x30 | 10 × 30 | 306 | 831 | 1981 | 16.4 | 43.9 | 0.37 |
-| knapsack-15x50 | 15 × 50 | 548 / 550 | 2411 | 5998 | 36.2 | 168 | 0.22 |
-| knapsack-20x60 | 20 × 60 | 1404 | 5463 | 14733 | 146 | 645 | 0.23 |
-| knapsack-30x80 | 30 × 80 | 229 | 948 | 2690 | 42.7 | 141 | 0.30 |
-| facility-10x30 | 40 × 310 | 70 | 584 | 4452 | 10.6 | 64.4 | 0.16 |
-| facility-15x50 | 65 × 765 | 45 | 535 | 4202 | 12.6 | 99.5 | 0.13 |
-| facility-20x60 | 80 × 1220 | 228 | 3191 | 27955 | 88.6 | 645 | 0.14 |
+| knapsack-10x30 | 10 × 30 | 208 | 1014 | 1481 | 24.0 | 50.7 | 0.47 |
+| knapsack-15x50 | 15 × 50 | 418 | 2641 | 4798 | 78.1 | 141 | 0.56 |
+| knapsack-20x60 | 20 × 60 | 1267 | 6421 | 13464 | 197 | 639 | 0.31 |
+| knapsack-30x80 | 30 × 80 | 197 | 3160 | 4246 | 84.8 | 145 | 0.59 |
+| facility-10x30 | 40 × 310 | 40 | 660 | 2070 | 9.95 | 23.5 | 0.42 |
+| facility-15x50 | 65 × 765 | 33 | 843 | 2197 | 19.7 | 32.8 | 0.60 |
+| facility-20x60 | 80 × 1220 | 147 | 3819 | 16057 | 96.7 | 252 | 0.38 |
 
-Run 2026-11-19: smaltlp 0.14.0 on Node 22.23.5. CPU: Intel(R) Xeon(R) Processor @ 2.10GHz. Both prove the same optimum.
+Run 2026-11-24: smaltlp 0.14.0 on Node 22.23.5. CPU: Intel(R) Xeon(R) Processor @ 2.10GHz. Both prove the same optimum.
 
 <!-- /bench:warm -->
 
-- **The same search, far fewer iterations.** Both ways visit the same nodes, give or take one or two where rounding
-  differs; warm starts take 35% to 42% of the iterations on the knapsacks and 11% to 13% on facility location.
+- **The same search, far fewer iterations.** Both ways visit the same nodes; warm starts take 48% to 74% of the
+  iterations on the knapsacks and 24% to 38% on facility location. With the most fractional rule (the run of
+  2026-11-19, in git) they took 35% to 42% and 11% to 13%: reliability branching's strong branching solves count in
+  both columns, and always start from the node's basis.
 - **Each node, cheaper** (2026-11-19). A child starts from a copy of its parent's factorization rather than factoring
   its basis again, and computes its values from that factorization and its updates rather than factoring once more at
   the end; A's rows are built once for the whole search, not at every node. With the pivot row and ratio test above,
@@ -153,23 +155,33 @@ branching rule, cuts or heuristics show.
 
 - **Problems,** from the same generators (`bench/problems.mjs`, `HARD_MIPS`): knapsacks of 10 rows and 100, 150 and
   200 items, and of 20 rows and 200; facility location with 30 facilities and 80 customers, and 40 and 100.
-- **The search:** branch-and-bound with its default options, to a gap of 0, from one build.
-- **Timing:** one run of each, in one process. The larger take tens of seconds, so their times move little from run to
+- **The search:** branch-and-bound to a gap of 0, from one build, with each branching rule: reliability branching (the
+  default, 2026-11-24) and the most fractional column, as before.
+- **Timing:** one run of each, in one process, the default's first. The larger take tens of seconds, so their times move little from run to
   run; the smaller move more.
 - **Rerun:** `npm run bench:hard` (about two minutes), which writes the table below. `SMALTLP_DIST=path/to/dist node
   bench/hard.mjs` times another build and prints its results.
 
 <!-- bench:hard -->
 
-| Problem | Rows × columns | Nodes | Iterations | Seconds |
-| --- | --- | ---: | ---: | ---: |
-| knapsack-10x100 | 10 × 100 | 5,425 | 22,967 | 0.8 |
-| knapsack-10x150 | 10 × 150 | 16,035 | 68,058 | 3.4 |
-| knapsack-20x200 | 20 × 200 | 41,649 | 226,183 | 37.7 |
-| knapsack-10x200 | 10 × 200 | 58,583 | 286,130 | 43.9 |
-| facility-30x80 | 110 × 2430 | 974 | 10,876 | 0.9 |
-| facility-40x100 | 140 × 4040 | 3,120 | 37,522 | 2.7 |
+| Problem | Rows × columns | Nodes: reliability | Nodes: most fractional | Iterations: reliability | Iterations: most fractional | Seconds: reliability | Seconds: most fractional | Reliability ÷ most fractional, time |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| knapsack-10x100 | 10 × 100 | 5,018 | 5,425 | 23,717 | 22,967 | 0.9 | 0.9 | 0.91 |
+| knapsack-10x150 | 10 × 150 | 9,594 | 16,035 | 46,095 | 68,058 | 2.2 | 3.7 | 0.60 |
+| knapsack-20x200 | 20 × 200 | 28,447 | 41,649 | 160,823 | 226,183 | 19.0 | 37.4 | 0.51 |
+| knapsack-10x200 | 10 × 200 | 36,515 | 58,583 | 199,074 | 286,130 | 27.6 | 41.1 | 0.67 |
+| facility-30x80 | 110 × 2430 | 499 | 974 | 7,622 | 10,876 | 0.4 | 0.9 | 0.47 |
+| facility-40x100 | 140 × 4040 | 1,763 | 3,120 | 22,800 | 37,522 | 1.3 | 2.6 | 0.51 |
 
-Run 2026-11-24: smaltlp 0.14.0 on Node 22.23.5. CPU: Intel(R) Xeon(R) Processor @ 2.10GHz. One run of each.
+Run 2026-11-24: smaltlp 0.14.0 on Node 22.23.5. CPU: Intel(R) Xeon(R) Processor @ 2.10GHz. One run of each. Both prove the same optimum.
 
 <!-- /bench:hard -->
+
+- **Reliability branching** (2026-11-24) chooses the column to branch on by its pseudocosts (Achterberg, Koch and
+  Martin, 2005): the bound's gain per unit, down and up, averaged over the children solved so far; a column with fewer
+  than four on a side has its two children solved there and then (strong branching), and they are kept. It needs fewer
+  nodes on every problem here and above. On these it takes 0.47 to 0.91 of the most fractional rule's time. On the
+  smaller problems above, which solve in a few hundred nodes, the extra solves cost more than the nodes they save: with
+  both rules in one process, alternating, two runs, reliability ÷ most fractional was 1.39 and 1.50, 1.20 and 1.23,
+  1.03 and 1.14, 2.76 and 3.05 on the knapsacks, and 1.08 and 1.13, 1.64 and 1.67, 1.02 and 1.03 on facility location,
+  at most about 70 ms more (knapsack-30x80).

@@ -71,10 +71,14 @@ A `MilpResult`, scipy's fields in camelCase:
 ## Notes
 
 Solved by branch-and-bound over the [`linprog`](./linprog) dual simplex. The search goes depth first until it finds a
-first integer solution, then takes the open node with the lowest bound. It branches on the integer variable whose
-value is furthest from a whole number. A value within 1e-6 of a whole number counts as whole, as in HiGHS. Each node below
-the root starts the dual simplex from its parent's optimal basis and a copy of its factorization (a warm start), which takes fewer than half the
-iterations of solving it from the start ([benchmarks](../research/benchmarks#branch-and-bound-warm-starts)). There are
+first integer solution, then takes the open node with the lowest bound. It chooses the variable to branch on by
+reliability branching (Achterberg, Koch and Martin, 2005): each variable's record of how much the bound rose when it was
+rounded down and up, and, until a variable has four of each, its two branches solved there and then. On the harder
+problems in the [benchmarks](../research/benchmarks#branch-and-bound-harder-problems) this takes 0.47 to 0.91 of the
+time of branching on the most fractional variable; on problems that solve in a few hundred nodes it can take longer. A value
+within 1e-6 of a whole number counts as whole, as in HiGHS. Each node below
+the root starts the dual simplex from its parent's optimal basis and a copy of its factorization (a warm start), which takes 24% to 74% of
+the iterations of solving each from the start ([benchmarks](../research/benchmarks#branch-and-bound-warm-starts)). There are
 no cutting planes or heuristics yet, so smaltlp solves fewer problems than HiGHS in the same time.
 
 The compare tests solve 90 problems to a gap of 0 with scipy 1.18.1 (HiGHS) and smaltlp: the status and `fun` agree

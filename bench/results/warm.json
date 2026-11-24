@@ -2,21 +2,21 @@
  "library": "smaltlp 0.14.0",
  "runtime": "Node 22.23.5",
  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
- "date": "2026-11-19",
+ "date": "2026-11-24",
  "results": {
   "knapsack-10x30": {
    "rows": 10,
    "cols": 30,
    "warm": {
-    "milliseconds": 16.369215000000025,
-    "nodes": 306,
-    "iterations": 831,
+    "milliseconds": 23.959281000000004,
+    "nodes": 208,
+    "iterations": 1014,
     "objective": -445
    },
    "cold": {
-    "milliseconds": 43.90520099999998,
-    "nodes": 306,
-    "iterations": 1981,
+    "milliseconds": 50.71195499999999,
+    "nodes": 208,
+    "iterations": 1481,
     "objective": -445
    }
   },
@@ -24,15 +24,15 @@
    "rows": 15,
    "cols": 50,
    "warm": {
-    "milliseconds": 36.18914099999995,
-    "nodes": 548,
-    "iterations": 2411,
+    "milliseconds": 78.11395600000003,
+    "nodes": 418,
+    "iterations": 2641,
     "objective": -742
    },
    "cold": {
-    "milliseconds": 167.6441870000001,
-    "nodes": 550,
-    "iterations": 5998,
+    "milliseconds": 140.65573599999993,
+    "nodes": 418,
+    "iterations": 4798,
     "objective": -742
    }
   },
@@ -40,15 +40,15 @@
    "rows": 20,
    "cols": 60,
    "warm": {
-    "milliseconds": 145.59186199999976,
-    "nodes": 1404,
-    "iterations": 5463,
+    "milliseconds": 196.85008600000037,
+    "nodes": 1267,
+    "iterations": 6421,
     "objective": -844
    },
    "cold": {
-    "milliseconds": 644.9339209999998,
-    "nodes": 1404,
-    "iterations": 14733,
+    "milliseconds": 638.9494800000002,
+    "nodes": 1267,
+    "iterations": 13464,
     "objective": -844
    }
   },
@@ -56,15 +56,15 @@
    "rows": 30,
    "cols": 80,
    "warm": {
-    "milliseconds": 42.6865029999999,
-    "nodes": 229,
-    "iterations": 948,
+    "milliseconds": 84.78967199999988,
+    "nodes": 197,
+    "iterations": 3160,
     "objective": -1172
    },
    "cold": {
-    "milliseconds": 141.2696109999997,
-    "nodes": 229,
-    "iterations": 2690,
+    "milliseconds": 144.6997569999994,
+    "nodes": 197,
+    "iterations": 4246,
     "objective": -1172
    }
   },
@@ -72,15 +72,15 @@
    "rows": 40,
    "cols": 310,
    "warm": {
-    "milliseconds": 10.610413999999764,
-    "nodes": 70,
-    "iterations": 584,
+    "milliseconds": 9.94909000000007,
+    "nodes": 40,
+    "iterations": 660,
     "objective": 4207.530000000001
    },
    "cold": {
-    "milliseconds": 64.42270399999961,
-    "nodes": 70,
-    "iterations": 4452,
+    "milliseconds": 23.454087000000072,
+    "nodes": 40,
+    "iterations": 2070,
     "objective": 4207.530000000001
    }
   },
@@ -88,15 +88,15 @@
    "rows": 65,
    "cols": 765,
    "warm": {
-    "milliseconds": 12.640000999999756,
-    "nodes": 45,
-    "iterations": 535,
+    "milliseconds": 19.69557799999984,
+    "nodes": 33,
+    "iterations": 843,
     "objective": 4032.9
    },
    "cold": {
-    "milliseconds": 99.46291500000007,
-    "nodes": 45,
-    "iterations": 4202,
+    "milliseconds": 32.810615999999754,
+    "nodes": 33,
+    "iterations": 2197,
     "objective": 4032.9
    }
   },
@@ -104,15 +104,15 @@
    "rows": 80,
    "cols": 1220,
    "warm": {
-    "milliseconds": 88.56122899999991,
-    "nodes": 228,
-    "iterations": 3191,
+    "milliseconds": 96.71587799999998,
+    "nodes": 147,
+    "iterations": 3819,
     "objective": 4580.490000000001
    },
    "cold": {
-    "milliseconds": 644.8928369999994,
-    "nodes": 228,
-    "iterations": 27955,
+    "milliseconds": 251.81513499999892,
+    "nodes": 147,
+    "iterations": 16057,
     "objective": 4580.490000000001
    }
   }

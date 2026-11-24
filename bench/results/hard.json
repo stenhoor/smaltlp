@@ -7,50 +7,98 @@
   "knapsack-10x100": {
    "rows": 10,
    "cols": 100,
-   "milliseconds": 819.174243,
-   "nodes": 5425,
-   "iterations": 22967,
-   "objective": -1493
+   "reliability": {
+    "milliseconds": 868.921292,
+    "nodes": 5018,
+    "iterations": 23717,
+    "objective": -1493
+   },
+   "mostFractional": {
+    "milliseconds": 949.9775269999999,
+    "nodes": 5425,
+    "iterations": 22967,
+    "objective": -1493
+   }
   },
   "knapsack-10x150": {
    "rows": 10,
    "cols": 150,
-   "milliseconds": 3391.1114509999998,
-   "nodes": 16035,
-   "iterations": 68058,
-   "objective": -2256
+   "reliability": {
+    "milliseconds": 2193.4145,
+    "nodes": 9594,
+    "iterations": 46095,
+    "objective": -2256
+   },
+   "mostFractional": {
+    "milliseconds": 3681.0626260000004,
+    "nodes": 16035,
+    "iterations": 68058,
+    "objective": -2256
+   }
   },
   "knapsack-20x200": {
    "rows": 20,
    "cols": 200,
-   "milliseconds": 37742.899735,
-   "nodes": 41649,
-   "iterations": 226183,
-   "objective": -2952
+   "reliability": {
+    "milliseconds": 18952.320213,
+    "nodes": 28447,
+    "iterations": 160823,
+    "objective": -2952
+   },
+   "mostFractional": {
+    "milliseconds": 37351.260024,
+    "nodes": 41649,
+    "iterations": 226183,
+    "objective": -2952
+   }
   },
   "knapsack-10x200": {
    "rows": 10,
    "cols": 200,
-   "milliseconds": 43925.268086000004,
-   "nodes": 58583,
-   "iterations": 286130,
-   "objective": -3127
+   "reliability": {
+    "milliseconds": 27637.545634000002,
+    "nodes": 36515,
+    "iterations": 199074,
+    "objective": -3127
+   },
+   "mostFractional": {
+    "milliseconds": 41053.537251999995,
+    "nodes": 58583,
+    "iterations": 286130,
+    "objective": -3127
+   }
   },
   "facility-30x80": {
    "rows": 110,
    "cols": 2430,
-   "milliseconds": 889.7090339999995,
-   "nodes": 974,
-   "iterations": 10876,
-   "objective": 5527.499999999997
+   "reliability": {
+    "milliseconds": 403.2643339999777,
+    "nodes": 499,
+    "iterations": 7622,
+    "objective": 5527.499999999997
+   },
+   "mostFractional": {
+    "milliseconds": 860.7436230000167,
+    "nodes": 974,
+    "iterations": 10876,
+    "objective": 5527.499999999997
+   }
   },
   "facility-40x100": {
    "rows": 140,
    "cols": 4040,
-   "milliseconds": 2695.8260779999982,
-   "nodes": 3120,
-   "iterations": 37522,
-   "objective": 5726.8099999999995
+   "reliability": {
+    "milliseconds": 1338.9383009999874,
+    "nodes": 1763,
+    "iterations": 22800,
+    "objective": 5726.8099999999995
+   },
+   "mostFractional": {
+    "milliseconds": 2620.0442009999824,
+    "nodes": 3120,
+    "iterations": 37522,
+    "objective": 5726.8099999999995
+   }
   }
  }
 }
