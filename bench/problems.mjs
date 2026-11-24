@@ -1,6 +1,6 @@
-// The integer programs bench/warm.mjs times branch-and-bound on, from seeded generators. Each takes the dist/ to
-// build from, so the same problems can be timed on an older build (SMALTLP_DIST).
-//   import { MIPS } from './problems.mjs'
+// The integer programs bench/warm.mjs and bench/hard.mjs time branch-and-bound on, from seeded generators. Each takes
+// the dist/ to build from, so the same problems can be timed on an older build (SMALTLP_DIST).
+//   import { MIPS, HARD_MIPS } from './problems.mjs'
 //
 // - Multi-dimensional knapsacks: m rows of whole weights 1 to 30, each row's capacity half its total, and n binary
 //   items worth 1 to 40.
@@ -82,4 +82,18 @@ export const MIPS = [
   { key: 'facility-10x30', kind: 'facility', rows: 40, cols: 310, make: (t) => facility(t, 10, 30, 1030) },
   { key: 'facility-15x50', kind: 'facility', rows: 65, cols: 765, make: (t) => facility(t, 15, 50, 1550) },
   { key: 'facility-20x60', kind: 'facility', rows: 80, cols: 1220, make: (t) => facility(t, 20, 60, 2060) },
+];
+
+/**
+ * Harder problems, from the same generators: thousands to tens of thousands of nodes, where how the search branches
+ * shows (bench/hard.mjs). The seed is the size: rows × 1,000 + columns for a knapsack, F × 1,000 + K for facility
+ * location.
+ */
+export const HARD_MIPS = [
+  { key: 'knapsack-10x100', kind: 'knapsack', rows: 10, cols: 100, make: (t) => knapsack(t, 10, 100, 10100) },
+  { key: 'knapsack-10x150', kind: 'knapsack', rows: 10, cols: 150, make: (t) => knapsack(t, 10, 150, 10150) },
+  { key: 'knapsack-20x200', kind: 'knapsack', rows: 20, cols: 200, make: (t) => knapsack(t, 20, 200, 20200) },
+  { key: 'knapsack-10x200', kind: 'knapsack', rows: 10, cols: 200, make: (t) => knapsack(t, 10, 200, 10200) },
+  { key: 'facility-30x80', kind: 'facility', rows: 110, cols: 2430, make: (t) => facility(t, 30, 80, 30080) },
+  { key: 'facility-40x100', kind: 'facility', rows: 140, cols: 4040, make: (t) => facility(t, 40, 100, 40100) },
 ];
